@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ocr-platform"
+version = "0.1.0"
+description = "Provenance-first OCR/data extraction for FAMILY_SURVEY_V1"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+dependencies = [
+  # Pins validated by scripts/run_spike.py go/no-go matrix before R0 extraction.
+  # Do not add paddleocr/paddlepaddle pins until spike records exact versions.
+  "pydantic>=2.7,<3",
+  "pyyaml>=6.0",
+  "pypdf>=4.2",
+  "pillow>=10.3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "ruff>=0.5",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ocr_platform"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
