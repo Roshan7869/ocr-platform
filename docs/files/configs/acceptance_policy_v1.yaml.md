@@ -10,11 +10,12 @@ Versioned AcceptancePolicy-v1 artifact: thresholds, hard-review reason list, pre
   - `policy_version: AcceptancePolicy-v1` immutable once used in a run; changes bump version (fingerprint).
   - Required rules from design AcceptancePolicy-v1 all present (present/absent/unreadable/NA evidence rules, overlap 0.80, native/OCR compare, duplicates, unknown vocab, disabled calibrated thresholds, accepted_by fields).
   - Hard review reasons: full 14-item list (OCR confidence, multi candidates, boundary cross/touch/overlap, unstable OCR, unknown code, invalid numeric, conflicting marks, multi single-select, unknown symbol, unresolved ditto, cross-field conflict, wrong template).
-  - R0: `ocr_auto_accept_enabled: false`, `native_auto_accept_enabled: false` until spike sign-off flips them (config change + fingerprint).
+  - R0: `ocr_auto_accept_enabled: false`, `native_auto_accept_enabled: false` until **spike go + calibration report** (ADR-005; `docs/accuracy-plan.md` §4) flip them (config change + fingerprint bump).
+  - Handwriting: rule that `handwriting_suspected` on text fields forces review (ADR-004).
   - Conservative defaults favor review.
   - Per-field trigger applicability lives in template `review_triggers.yaml` — this file owns **thresholds and global gates**, not per-field lists (avoid fork).
 - **Outputs:** typed policy config.
-- **Forbidden:** embedding template geometry; composite final_confidence formula.
+- **Forbidden:** embedding template geometry; composite final_confidence formula; flipping auto-accept flags without calibration report path.
 
 ## Infrastructure
 
@@ -33,7 +34,9 @@ Versioned AcceptancePolicy-v1 artifact: thresholds, hard-review reason list, pre
 - Unit: schema validates; required rule keys present
 - Unit: version string flows to decisions
 - Unit: disabling OCR auto-accept forces review on OCR-only present fields in R0 mode
+- Unit: handwriting_suspected key present and forces review when set
 - Integration: policy version appears in every accepted decision export
+- Integration: flag flip rejected in tests without calibration marker (ADR-005)
 
 ## Milestone
 

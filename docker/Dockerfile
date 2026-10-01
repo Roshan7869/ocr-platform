@@ -1,6 +1,9 @@
-# R0 base image. Exact paddle/paddleocr/CUDA pins recorded by scripts/run_spike.py
-# go/no-go matrix; this file is updated only after the spike passes.
+# Multi-target image (ADR-003): cpu-spike (default) · cpu-runtime · gpu-runtime (post-spike pins).
+# Exact paddle/paddleocr/CUDA pins recorded by scripts/run_spike.py go/no-go matrix.
+# Production OCR = cloud GPU workers; local CPU = dev/spike only (docs/capacity.md).
+# Rasterizer: pypdfium2 primary (ADR-001) after spike.
 FROM python:3.11-slim-bookworm
+# gpu-runtime (post-spike): FROM nvidia/cuda:...-cudnn-runtime-ubuntu... + matching python
 
 WORKDIR /app
 
@@ -12,6 +15,7 @@ COPY src ./src
 COPY configs ./configs
 COPY templates ./templates
 COPY scripts ./scripts
+COPY fixtures ./fixtures
 
 RUN pip install -e .
 

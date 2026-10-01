@@ -12,8 +12,9 @@ Family-member table algorithm parameters: data region reference (page_2), dynami
   - Blank rows below last member produce no `NO_MEMBER` fake records and no empty Member entities.
   - Row identity: `row_key` stable within rendered table/run — not inferred across pages by position alone (design linkage rules); explicit linkage for cross-entity keys.
   - Dynamic detector may fail closed → page review, never invent rows.
+  - **Accuracy targets (R0 exit on layout refs — `docs/accuracy-plan.md`):** row recall ≥0.95, row precision ≥0.95, zero fake blank-row records, 100% `row_key` uniqueness; failure reasons `ROW_UNDERSEGMENT` / `ROW_OVERSEGMENT` / `ROW_UNCERTAIN`.
 - **Outputs:** algorithm config for `boundaries.py` table path.
-- **Forbidden:** acceptance thresholds (live in AcceptancePolicy); OCR model config.
+- **Forbidden:** acceptance thresholds (live in AcceptancePolicy); OCR model config; hardcoded populated row count.
 
 ## Boundary classes
 
@@ -41,6 +42,7 @@ member/education row structure (links entities).
 - Unit: blank trailing region yields zero rows
 - Integration: 95–99.pdf varying member counts → row counts match manual annotation
 - Integration: row_key uniqueness within run
+- Integration: row recall/precision ≥0.95 on 10 layout refs (accuracy-plan gate)
 
 ## Milestone
 

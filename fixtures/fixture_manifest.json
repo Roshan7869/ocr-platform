@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "template_version": "FAMILY_SURVEY_V1",
+  "notes": "Seed only. Entries require survey classification (synthetic | approved_redacted) before loader use. See docs/data-plan.md. Content hash must be sha256 of exact PDF bytes at allowed_storage_location.",
+  "fixtures": []
+}

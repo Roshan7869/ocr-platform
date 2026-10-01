@@ -11,6 +11,7 @@ Pinned detection/recognition model registry: exact names, revisions, checksums, 
   - Each entry: model id, revision, sha256, license, source URL, task (det/rec), language script (Devanagari).
   - Configuration fingerprint includes model checksums (design run identity).
   - Spike may prove v3 vs v5 rec model choice; record winner here, do not hardcode in engine.
+  - Pins must match **cpu-spike** and **gpu-runtime** matrix rows (ADR-003); deviation = rebuild matrix.
 - **Outputs:** registry structure + `get_model("det"|"rec")` API.
 - **Forbidden:** downloading without checksum verify; silent version drift.
 

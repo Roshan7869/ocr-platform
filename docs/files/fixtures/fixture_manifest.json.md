@@ -13,8 +13,8 @@ Classification gate for all fixtures: one JSON entry per PDF (synthetic / approv
   - Smoke set (e.g. 5 docs) labeled smoke — never used alone for promotion claims.
   - Real survey PDFs from `~/Documents/WARD-42/...` require approved_redacted (or synthetic) entry **before** loader opens them; not stored in git until classification + path policy allow.
   - Expiry ISO-8601; loader rejects past expiry.
-- **Outputs:** manifest JSON.
-- **Forbidden:** wildcard globs without per-file entries; classification `unknown` accepted by loader.
+- **Outputs:** manifest JSON (`schema_version`, `fixtures[]`); seed may ship with empty `fixtures` until survey classification — loader stays fail-closed. Field list aligned with `docs/data-plan.md` §2.
+- **Forbidden:** wildcard globs without per-file entries; classification `unknown` accepted by loader; committing real PDF bytes without path policy.
 
 ## Infrastructure
 

@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 license = { text = "Proprietary" }
 dependencies = [
   # Pins validated by scripts/run_spike.py go/no-go matrix before R0 extraction.
+  # Rasterizer primary candidate: pypdfium2 (ADR-001) — add exact pin post-spike.
   # Do not add paddleocr/paddlepaddle pins until spike records exact versions.
   "pydantic>=2.7,<3",
   "pyyaml>=6.0",
@@ -18,6 +19,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Post-spike extras (documented intent; unpin after matrix go):
+#   render = ["pypdfium2>=..."]   # ADR-001
+#   ocr-cpu = ["paddleocr==...", "paddlepaddle==..."]
+#   ocr-gpu = ["paddleocr==...", "paddlepaddle-gpu==..."]
 dev = [
   "pytest>=8.2",
   "ruff>=0.5",

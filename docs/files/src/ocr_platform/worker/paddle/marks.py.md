@@ -18,6 +18,7 @@ Checkbox / mark / glyph evidence extractor for CHECKBOX_OPTION and CHECKBOX_GROU
   - Never infer one question's status from another (sanitation ≠ housing type, etc.).
   - Emits mark evidence (RegionEvidence or mark-typed observation) into EvidenceSet — not `OcrObservation` text.
   - Ditto marks (`"`) in table cells: `raw=ditto`, `semantic_type=DITTO`, `reference_row` — raw never overwritten with expanded value (expansion via cross_field with provenance op).
+  - Handwriting (ADR-004): checkbox path stays geometric; marks are not routed through print-text OCR accept; pen strokes crossing option edges → AMBIGUOUS/BOUNDARY_REVIEW per table above.
 - **Outputs:** per-option mark evidence + selected/ambiguous signals.
 - **Forbidden:** OCR-reading the full question; collapsing multi-select to free text; treating blank as NO without form rule.
 

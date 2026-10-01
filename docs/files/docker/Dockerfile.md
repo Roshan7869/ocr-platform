@@ -2,25 +2,27 @@
 
 ## Role
 
-Reproducible container build for the R0 single-process extractor: Python 3.11 slim base, non-root user, package install, ENTRYPOINT `scripts/extract.py`. Placeholder pins until `scripts/run_spike.py` records the go/no-go matrix (CUDA/Paddle variants may fork this file or add a target stage).
+Reproducible container builds for the extractor: **multi-target** — `cpu-spike` (dev/spike), `cpu-runtime` (on-prem low volume), `gpu-runtime` (production OCR on cloud GPU — ADR-003). Python slim base, non-root user, package install, ENTRYPOINT `scripts/extract.py`. Placeholder pins until `scripts/run_spike.py` records the go/no-go matrix (CUDA/Paddle variants per target).
 
 ## Contracts
 
 - **Invariants:**
   - Exact Python/PaddleOCR/PaddlePaddle/CUDA/driver pins **only after spike matrix pass** — comments mark the gate; no floating `latest` base for production builds.
+  - **Targets:** default/`cpu-spike` for CI on CPU-only hosts; `gpu-runtime` for production (not required to build on laptop CI if no CUDA base available — optional job).
   - Non-root USER; no secrets baked in.
   - Copies pyproject, src, configs, templates, scripts (fixtures mounted or path-referenced, not assumed in image for sensitive data).
-  - CI builds this image for dependency-pin + reproducibility checks (design Distribution Plan).
+  - CI builds at least `cpu-spike` for dependency-pin + reproducibility checks (design Distribution Plan).
   - RACE: if custom images unsupported, this file documents the pin set for a template+bootstrap alternative (strategy recorded in spike matrix, not guessed here).
-- **Outputs:** runnable image with extract CLI.
-- **Forbidden:** embedding model weights without checksum policy; running as root; unpinned paddle in final stage.
+  - Rasterizer pin aligns with ADR-001 / spike matrix.
+- **Outputs:** runnable images with extract CLI.
+- **Forbidden:** embedding model weights without checksum policy; running as root; unpinned paddle in final stage; baking classified PDFs into image layers.
 
 ## Infrastructure
 
 - **Python deps:** project via pip install -e .
-- **Config/artifacts:** configs/, templates/ copied in
+- **Config/artifacts:** configs/, templates/, fixtures/ seed copied in (real PDFs mounted at runtime)
 - **Models/external:** models downloaded at runtime or bake stage post-spike (TBD by spike)
-- **Env vars:** none required at build; runtime CUDA_* optional
+- **Env vars:** none required at build; runtime CUDA_* optional on gpu-runtime
 
 ## Depends on
 
@@ -29,14 +31,15 @@ Reproducible container build for the R0 single-process extractor: Python 3.11 sl
 
 ## Tests
 
-- Integration: image builds in CI
+- Integration: `cpu-spike` image builds in CI
 - Integration: `docker run … --help` / usage exit 4 on bad args
 - Integration: smoke extract on mounted classified fixture (post-spike pins)
 - Gate: Dockerfile pin block matches spike matrix text (manual/CI grep)
+- Gate: gpu-runtime target documented even when CI skips CUDA build
 
 ## Milestone
 
-R0
+R0 (cpu-spike) / R0.5–R1 (gpu-runtime pins)
 
 ## Status
 

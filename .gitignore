@@ -11,6 +11,10 @@ build/
 .env
 *.pdf
 !fixtures/**/*.pdf
+ruvector.db
+.ruvector/
+.claude-flow/
+.swarm/
 artifacts/
 runs/
 .DS_Store

@@ -11,8 +11,9 @@ Coordinate transforms and explicit coordinate-system algebra: PDF bottom-left â†
   - PDF native bottom-left never silently equals image top-left; conversion is explicit and tested.
   - Crop-local intermediates tagged `crop_local_*` and never used as evidence page-space boxes.
   - No module may mix systems without going through these helpers.
-- **Outputs:** `to_page_normalized`, `to_pixel`, `pdf_rect_to_image_bbox`, invariants/assert helpers.
-- **Forbidden:** rounding policies that lose provenance (document any quantization).
+  - **Canonical page-box normalize** (unit box) is an explicit helper used by registration R0 (ADR-002); result is recorded â€” not applied as silent deskew/scale inside OCR.
+- **Outputs:** `to_page_normalized`, `to_pixel`, `pdf_rect_to_image_bbox`, `normalize_page_box` (explicit), invariants/assert helpers.
+- **Forbidden:** rounding policies that lose provenance (document any quantization); hidden affine transforms outside `registration.py`.
 
 ## Infrastructure
 
@@ -31,6 +32,7 @@ Coordinate transforms and explicit coordinate-system algebra: PDF bottom-left â†
 - Unit: normalizedâ†”pixel round-trip within epsilon
 - Unit: PDF bottom-left â†’ image top-left conversion (design unit list)
 - Unit: reject cross-system ops without conversion
+- Unit: normalize_page_box is pure + explicitly callable (no ambient mutation)
 - Integration: R0 identity-transform boundary assignment uses same helpers as export
 
 ## Milestone

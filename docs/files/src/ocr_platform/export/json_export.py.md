@@ -14,8 +14,9 @@ Serialize run outputs to canonical JSON: `Household`, `Member`, `EducationRecord
   - Missing values are value_state + decision, never `""`.
   - Education cells map to `EducationRecord` entity owner (not flattened into member) when catalog says so; same-row linkage explicit via `row_key`/provenance, not cross-page guess.
   - Includes expected-output example shape from field catalog when present.
+  - **PII posture:** exports may contain names, mobiles, addresses — R0 writes local classified paths only; R1+ requires encryption-at-rest + retention hooks (`docs/market-roadmap.md` privacy); never log raw field values.
 - **Outputs:** JSON file(s) / bytes for a run.
-- **Forbidden:** writing accepted values with validation report failure; inventing catalog fields not in `field_catalog.json`.
+- **Forbidden:** writing accepted values with validation report failure; inventing catalog fields not in `field_catalog.json`; emitting accepted values without redaction policy when mode requires it (R1+).
 
 ## Infrastructure
 

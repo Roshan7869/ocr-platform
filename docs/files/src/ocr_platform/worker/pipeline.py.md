@@ -8,10 +8,11 @@ Single-process R0 orchestrator: PDF → render → template apply (identity regi
 
 - **Invariants:**
   - Order fixed by design data flow; no stage may skip provenance attachment.
-  - Registration mode is `identity` in R0; missing/ambiguous registration never yields accepted field decisions.
+  - Registration mode is `identity` (+ recorded page-box normalize) in R0; `affine` in R0.5 with residual gate; missing/ambiguous registration never yields accepted field decisions (ADR-002).
   - Auto-accept only when AcceptancePolicy-v1 passes; otherwise review/exception export.
   - Re-run of same input+config → same decision IDs / canonical JSON within R0 comparison policy (GPU numerical tolerance where declared).
-  - OCR and native text both gated for auto-acceptance until spike confirms adapters (design AcceptancePolicy note).
+  - OCR and native text both gated for auto-acceptance until spike **and** calibration evidence (ADR-005).
+  - Handwriting-suspected text fields never auto-accepted (ADR-004).
 - **Outputs:** decisions, review candidates, provenance bundle, run record (in-memory R0; persistence is R1).
 - **Forbidden:** guessing field↔text assignment (must go template → boundary → field extraction); composite confidence; silent coercion of unknown codes.
 

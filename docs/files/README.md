@@ -4,7 +4,25 @@ One `.md` per planned file. Mirror tree of the repo. Contract: [`TEMPLATE.md`](T
 
 **Status legend:** `SPEC` = authored, code not landed · `IMPLEMENTED` = code exists · `VERIFIED` = GitNexus coverage + role check passed.
 
-**Invariant:** `FINAL_VALUE MUST NEVER EXIST WITHOUT PROVENANCE` · Template: `FAMILY_SURVEY_V1` · Milestone scope: **R0 only**.
+**Invariant:** `FINAL_VALUE MUST NEVER EXIST WITHOUT PROVENANCE` · Template: `FAMILY_SURVEY_V1` · Milestone scope: **R0 → R0.5** (R1+ outlined in roadmap).
+
+## System-level design docs (not per-file targets)
+
+| Doc | Role |
+|---|---|
+| [`../architecture.md`](../architecture.md) | Layers, data flow, trust boundaries, deployment views |
+| [`../sequences.md`](../sequences.md) | Happy path, failure, provenance, R1/R2 sketches |
+| [`../capacity.md`](../capacity.md) | Host metrics, throughput, GPU placement, optimization lever register |
+| [`../accuracy-plan.md`](../accuracy-plan.md) | Registration / handwriting / rows / calibration gates + report schema |
+| [`../data-plan.md`](../data-plan.md) | Fixtures, PII, template content, gold labeling |
+| [`../testing-plan.md`](../testing-plan.md) | Test levels, cross-cutting fail-closed gates, R0 exit gate |
+| [`../observability.md`](../observability.md) | Log/metric catalog, provenance-as-audit, PII-free rule |
+| [`../threat-model.md`](../threat-model.md) | STRIDE-lite threats, controls, residual gaps |
+| [`../reason-codes.md`](../reason-codes.md) | Canonical error / review / exit code registry |
+| [`../glossary.md`](../glossary.md) | Canonical term definitions |
+| [`../research-gaps.md`](../research-gaps.md) | Open-question register (RG-*) — spike / experiment / sign-off backlog |
+| [`../market-roadmap.md`](../market-roadmap.md) | Phased CLI → API → multi-tenant path |
+| [`../adr/`](../adr/README.md) | ADR-001…007 (rasterizer, registration, GPU, handwriting, fail-closed, market form, observability) |
 
 ## Index (41 targets)
 
@@ -20,7 +38,7 @@ One `.md` per planned file. Mirror tree of the repo. Contract: [`TEMPLATE.md`](T
 | 8 | `src/ocr_platform/worker/render/coordinates.py` | PDF↔image, normalized/pixel, crop-local transforms | — | SPEC |
 | 9 | `src/ocr_platform/worker/template/manifest.py` | Load hash-root manifest, approval scopes | — | SPEC |
 | 10 | `src/ocr_platform/worker/template/boundaries.py` | Typed bboxes, overlap≥0.80, INTERSECT cells | all classes | SPEC |
-| 11 | `src/ocr_platform/worker/template/registration.py` | R0 identity transform; R3 affine stub | LEGEND/ANCHOR | SPEC |
+| 11 | `src/ocr_platform/worker/template/registration.py` | R0 identity+normalize; R0.5 affine+residual | LEGEND/ANCHOR | SPEC |
 | 12 | `src/ocr_platform/worker/paddle/engine.py` | Paddle det+rec adapter → OcrObservation | — | SPEC |
 | 13 | `src/ocr_platform/worker/paddle/models.py` | Pinned model registry (post-spike) | — | SPEC |
 | 14 | `src/ocr_platform/worker/paddle/marks.py` | Checkbox/glyph/ditto mark evidence | CHECKBOX_* | SPEC |
@@ -50,7 +68,9 @@ One `.md` per planned file. Mirror tree of the repo. Contract: [`TEMPLATE.md`](T
 | 38 | `templates/family_survey_v1/cross_field_rules.yaml` | Conditionals + ditto columns + non-inference | — | SPEC |
 | 39 | `templates/family_survey_v1/review_triggers.yaml` | Per-field trigger applicability (no thresholds) | — | SPEC |
 | 40 | `fixtures/fixture_manifest.json` | Classification gate for all PDFs | **OWNER: survey** (redaction) | SPEC |
-| 41 | `docker/Dockerfile` | Pinned reproducible image (post-spike) | — | SPEC |
+| 41 | `docker/Dockerfile` | cpu-spike / cpu-runtime / gpu-runtime targets (post-spike pins) | — | SPEC |
+
+**Notes:** System docs + ADRs above are authoritative for registration (R0→R0.5), handwriting posture, calibration-before-auto-accept, cloud GPU placement, and phased market form. Per-file specs amended 2026-09-24 to match.
 
 ## Layout references (external, not in 41)
 

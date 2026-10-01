@@ -11,7 +11,8 @@ Export uncertain/exception results as review-candidate JSON for human inspection
   - Exception types align with decision reason codes / FAMILY_SURVEY_V1 labels mapped per `decision.md`.
   - Includes checkbox multi-mark, boundary, unknown vocab, invalid numeric, unresolved ditto, cross-field, wrong-template cases.
   - Never places candidate into accepted export path.
-  - Privacy: R0 fixtures only (synthetic/approved-redacted); crop paths local.
+  - Privacy: R0 fixtures only (synthetic/approved-redacted); crop paths local; crops inherit parent classification; R1+ TTL + encryption (`docs/market-roadmap.md`).
+  - Handwriting / registration / row segmentation reasons included when those signals fire (accuracy-plan taxonomies).
 - **Outputs:** review-candidate JSON array/file.
 - **Forbidden:** silent drop of secondary reason codes; accepted values in this file.
 

@@ -1,0 +1,94 @@
+FAMILY DATA COLLECTION FORM — COMPLETE FIELD SPEC
+POST https://api.itechnocrat.co.in/api/SurveyData/upload
+Content-Type: application/json | Authorization: Bearer <JWT>
+
+TOP-LEVEL: { main, details, members[] }  (schema HouseholdSurveyRequest, additionalProperties:false)
+
+======================================================================
+main  (NagarPalikaDetailsModel) — 11 fields
+  municipality                       string
+  zone                               string
+  ward                               string
+  wardNumber                         integer
+  surveyDate                         string
+  enumeratorName                     string
+  enumeratorMobile                   string
+  registerNumber                     string
+  imageNumber                        string
+  adminId                            integer
+  submitByLogin                      string
+
+======================================================================
+details  (SurveyDataDetailsModel) — 53 fields
+  familyTypes                        string
+  headofFamilyName                   string
+  headofFamilyContact                string
+  solidWasteManagement               string
+  electricityConnection              string
+  avgPowerCutHours                   string
+  altEnergy                          string
+  sanitationSewage                   string
+  sanitationSeptic                   string
+  sanitationOpenDrain                string
+  wardODF                            string
+  toiletsGovSubsidyCount             integer
+  communityPinkToilet                string
+  openDefecation                     string
+  drinkingWaterPipeline              string
+  drinkingWaterBorewellCount         string
+  drinkingWaterTankerCount           string
+  drinkingWaterHandpump              string
+  drinkingWaterOther                 string
+  houseTypeBungalow                  string
+  houseTypeIndependent               string
+  houseTypeApartment                 string
+  houseTypeSlum                      string
+  houseTypeUnauthorized              string
+  houseTypeHomeless                  string
+  ownershipSelf                      string
+  ownershipRent                      string
+  ownershipGovHousing                string
+  beneficiaryAyushman                string
+  beneficiaryPMStreet                string
+  beneficiaryPension                 string
+  beneficiaryAntyodayaCount          integer
+  beneficiaryAntyodayaAyushman       string
+  beneficiaryWidowPensionCount       integer
+  beneficiaryDisabledPensionCount    integer
+  beneficiaryPMAYUrban               string
+  beneficiaryLabourDept              string
+  beneficiaryMassMarriage            string
+  beneficiarySBMUrban                string
+  beneficiarySHG                     string
+  loanSource                         string
+  loanPurpose                        string
+  accessToBanking                    string
+  mobileCoverage                     string
+  broadbandAvailability              string
+  leaseLineCount                     integer
+  cctvInstalled                      string
+  cctvCoversStreet                   string
+  cctvWorking                        string
+  primaryOccupation                  string
+  otherOccupation                    string
+
+======================================================================
+members[]  (FamilyMemberDetailsModel) — 18 fields/member
+  memberName                         string
+  gender                             string
+  age                                string
+  socialStructure                    string
+  religion                           string
+  education                          string
+  disabilityBelow40                  string
+  disabilityAbove40                  string
+  houseType                          string
+  houseOwnership                     string
+  occupation                         string
+  monthlyIncome                      string
+  vehicle                            string
+  relationWithHead                   string
+  otherResidenceAddress              string
+  residentStatusCode                 string
+  newAddress                         string
+  migrationNatureCode                string

@@ -11,9 +11,10 @@ PaddleOCR adapter: whole-page **detection pass** + per-candidate **recognition p
   - Model names/versions from `models.py` (pinned post-spike; docs note current PaddleOCR v3.x docs advertise `devanagari_PP-OCRv5_mobile_rec` — spike chooses exact pin).
   - Overlapping/duplicate detections → separate observations until policy collapses exact duplicates.
   - Raw OCR confidence stored on observation; never combined into `final_confidence`.
-  - Auto-acceptance path remains gated until spike confirms adapter (AcceptancePolicy).
-- **Outputs:** list of `OcrObservation` with page-space bboxes + model versions.
-- **Forbidden:** field-state machine mutations; Laya; normalization.
+  - Auto-acceptance path remains gated until spike **and** calibration evidence (AcceptancePolicy; ADR-005).
+  - **Handwriting posture (ADR-004):** may set `handwriting_suspected` on FIELD observations (heuristics/print-model trust); policy forces review for text fields — engine never implies accept.
+- **Outputs:** list of `OcrObservation` with page-space bboxes + model versions (+ optional handwriting signal).
+- **Forbidden:** field-state machine mutations; Laya; normalization; auto-accept decisions.
 
 ## Infrastructure
 
@@ -31,6 +32,7 @@ PaddleOCR adapter: whole-page **detection pass** + per-candidate **recognition p
 
 - Unit: OCR adapter contract (mock backend) — shape of observations
 - Unit: recognition-only misuse rejected
+- Unit: handwriting signal does not imply acceptance
 - Integration: R0 scanned-only + mixed pages; OCR model failure fixture
 - Spike gate: two-page fixture ingestion + repeated-run comparison
 

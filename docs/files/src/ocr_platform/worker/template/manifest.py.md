@@ -9,11 +9,11 @@ Load, validate, and resolve the `FAMILY_SURVEY_V1` template package: read `templ
 - **Invariants:**
   - Manifest contains: canonical field/table definitions (via children), content hash, coordinate convention, render parameters, author, reviewer, approval scope/status, benchmark artifact ID, compatibility version, deprecation state (design Template lifecycle).
   - Child files (`page_1_boundaries.yaml`, `page_2_boundaries.yaml`, `table.yaml`, `field_types.yaml`, `vocabularies.yaml`, `validation_rules.yaml`, `cross_field_rules.yaml`, `review_triggers.yaml`, `field_catalog.json`) hash-verified against manifest.
-  - R0 runs only with `synthetic_baseline_approved` scope; production requires full gate.
+  - R0 runs only with `synthetic_baseline_approved` scope; production requires full gate (`docs/data-plan.md` checklist).
   - Every run stores exact manifest hash, not mutable name.
   - Activation/rollback are explicit operations (R5; R0 loads current approved).
 - **Outputs:** `ResolvedTemplate` (immutable).
-- **Forbidden:** editing YAML in place without new manifest hash; accepting unhashed children.
+- **Forbidden:** editing YAML in place without new manifest hash; accepting unhashed children; approval without survey owner fields.
 
 ## Infrastructure
 

@@ -16,10 +16,14 @@ Deterministic PDF → page image + `RenderMetadata` at fixed DPI and colorspace.
 
 ## Infrastructure
 
-- **Python deps:** pypdf, pillow (renderer binding chosen in spike; may add pypdfium2/poppler pin post-spike)
-- **Config/artifacts:** `configs/runtime.yaml` (DPI, colorspace)
+- **Python deps:** pypdf (structure/probe); **rasterizer primary: pypdfium2** (ADR-001); fallbacks in spike matrix: PyMuPDF or poppler `pdftoppm`; pillow
+- **Config/artifacts:** `configs/runtime.yaml` (DPI, colorspace, rasterizer id)
 - **Models/external:** none
 - **Env vars:** none
+
+## Milestone notes
+
+- Rasterizer library + version recorded in spike matrix and configuration fingerprint before production pins (`docs/adr/adr-001-pdf-rasterizer.md`).
 
 ## Depends on
 
@@ -28,10 +32,11 @@ Deterministic PDF → page image + `RenderMetadata` at fixed DPI and colorspace.
 
 ## Tests
 
-- Unit: render determinism at fixed DPI/colorspace (hash of page pixels stable)
+- Unit: render determinism at fixed DPI/colorspace (hash of page pixels stable) for chosen rasterizer
 - Unit: encrypted/corrupt PDF classified without crash
 - Unit: page-count extraction for extra/missing/duplicate page tests
 - Integration: R0 empty file / unreadable page fixtures
+- Integration: spike matrix rasterizer section filled (two-run pixel compare)
 
 ## Milestone
 

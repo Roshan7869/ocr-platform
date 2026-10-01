@@ -13,8 +13,9 @@ Apply typed template boundaries to a registered page: resolve FIELD / CHECKBOX_*
   - Never reconstruct table from full-page OCR text order.
   - Every output region keeps `coordinate_system=image_top_left_normalized` and `boundary_class`.
   - Signals for boundary quality: text_inside/touching/outside bbox, neighbor_overlap, crop_quality — emitted for policy, not decided here.
+  - Consumes only **registered** pages (R0 identity+normalize or R0.5 affine); registration failure surfaces as page review, not silent full-page accept (`docs/adr/adr-002-registration-strategy.md`).
 - **Outputs:** page-space region list + cell candidates + boundary-quality signals.
-- **Forbidden:** ACCEPT decisions; Laya calls; guessing which printed option is selected (that is `paddle/marks.py`).
+- **Forbidden:** ACCEPT decisions; Laya calls; guessing which printed option is selected (that is `paddle/marks.py`); applying template bounds before registration.
 
 ## Infrastructure
 
