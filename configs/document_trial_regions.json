@@ -1,0 +1,349 @@
+{
+  "schema_version": 1,
+  "documents": [
+    {
+      "id": "71b8a62329d09585",
+      "path": "11RN-985-WARD NO-42/27.pdf",
+      "sha256": "f7494cf4b15ba0508e4b2582b24227baafe596ab748082cb2c8131b1d902664c",
+      "batch": "11RN-985-WARD NO-42",
+      "classification": "unclassified",
+      "page_count": 2,
+      "split": "development",
+      "fields": [
+        {
+          "id": "member.row1.name",
+          "page": 1,
+          "bbox": [
+            0.06507844276583381,
+            0.4309006211180124,
+            0.1557234166182452,
+            0.4906832298136646
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row2.name",
+          "page": 1,
+          "bbox": [
+            0.06507844276583381,
+            0.49767080745341613,
+            0.1557234166182452,
+            0.5364906832298136
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row3.name",
+          "page": 1,
+          "bbox": [
+            0.06507844276583381,
+            0.5419254658385093,
+            0.1557234166182452,
+            0.5807453416149069
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row1.age",
+          "page": 1,
+          "bbox": [
+            0.1841952353282975,
+            0.4580745341614907,
+            0.21034282393957002,
+            0.48990683229813664
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row2.age",
+          "page": 1,
+          "bbox": [
+            0.1841952353282975,
+            0.5007763975155279,
+            0.21034282393957002,
+            0.5364906832298136
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row3.age",
+          "page": 1,
+          "bbox": [
+            0.1841952353282975,
+            0.546583850931677,
+            0.21034282393957002,
+            0.5815217391304348
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row1.gender",
+          "page": 1,
+          "bbox": [
+            0.15979081929110983,
+            0.46195652173913043,
+            0.1812899477048228,
+            0.48990683229813664
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row2.gender",
+          "page": 1,
+          "bbox": [
+            0.15979081929110983,
+            0.5054347826086957,
+            0.1812899477048228,
+            0.5364906832298136
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row3.gender",
+          "page": 1,
+          "bbox": [
+            0.15979081929110983,
+            0.5504658385093167,
+            0.1812899477048228,
+            0.5815217391304348
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row1.occupation",
+          "page": 1,
+          "bbox": [
+            0.4979662986635677,
+            0.4472049689440994,
+            0.5549099360836722,
+            0.49145962732919257
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row2.occupation",
+          "page": 1,
+          "bbox": [
+            0.4979662986635677,
+            0.5,
+            0.5549099360836722,
+            0.5364906832298136
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row3.occupation",
+          "page": 1,
+          "bbox": [
+            0.4979662986635677,
+            0.5434782608695652,
+            0.5549099360836722,
+            0.5815217391304348
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "control.printed1.occupation",
+          "page": 1,
+          "bbox": [
+            0.19755955839628123,
+            0.06677018633540373,
+            0.28355607205113303,
+            0.09006211180124224
+          ],
+          "kind": "print",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-control-selection-unverified"
+        },
+        {
+          "id": "control.printed2.occupation",
+          "page": 1,
+          "bbox": [
+            0.11446833236490413,
+            0.11413043478260869,
+            0.1958163858221964,
+            0.140527950310559
+          ],
+          "kind": "print",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-control-selection-unverified"
+        }
+      ]
+    },
+    {
+      "id": "ab10e1a83059b060",
+      "path": "1RN-982-WARD NO-42/95.pdf",
+      "sha256": "81e0c627a3fa2e5bf67129356675c7f9358757f4b31a44354b1849fbc51cb6e0",
+      "batch": "1RN-982-WARD NO-42",
+      "classification": "unclassified",
+      "page_count": 2,
+      "split": "development",
+      "fields": [
+        {
+          "id": "member.row1.name",
+          "page": 1,
+          "bbox": [
+            0.08435136707388016,
+            0.4805900621118012,
+            0.15881326352530542,
+            0.5069875776397516
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row2.name",
+          "page": 1,
+          "bbox": [
+            0.08435136707388016,
+            0.5225155279503105,
+            0.15881326352530542,
+            0.5496894409937888
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row1.age",
+          "page": 1,
+          "bbox": [
+            0.18848167539267016,
+            0.4798136645962733,
+            0.21465968586387435,
+            0.5046583850931677
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row2.age",
+          "page": 1,
+          "bbox": [
+            0.18848167539267016,
+            0.5194099378881988,
+            0.21465968586387435,
+            0.5489130434782609
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row1.gender",
+          "page": 1,
+          "bbox": [
+            0.16404886561954624,
+            0.4829192546583851,
+            0.18324607329842932,
+            0.5054347826086957
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row2.gender",
+          "page": 1,
+          "bbox": [
+            0.16404886561954624,
+            0.5186335403726708,
+            0.18324607329842932,
+            0.547360248447205
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row1.occupation",
+          "page": 1,
+          "bbox": [
+            0.5043630017452007,
+            0.46816770186335405,
+            0.5503199534613147,
+            0.5062111801242236
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "member.row2.occupation",
+          "page": 1,
+          "bbox": [
+            0.5043630017452007,
+            0.5139751552795031,
+            0.5503199534613147,
+            0.5489130434782609
+          ],
+          "kind": "handwriting",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-region-selection-unverified"
+        },
+        {
+          "id": "control.printed1.occupation",
+          "page": 1,
+          "bbox": [
+            0.19546247818499127,
+            0.08307453416149069,
+            0.2821407795229785,
+            0.10791925465838509
+          ],
+          "kind": "print",
+          "state": "present",
+          "expected": null,
+          "labeler": "codex-visual-control-selection-unverified"
+        }
+      ]
+    }
+  ]
+}

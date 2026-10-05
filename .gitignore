@@ -17,4 +17,6 @@ ruvector.db
 .swarm/
 artifacts/
 runs/
+data/
+models/
 .DS_Store

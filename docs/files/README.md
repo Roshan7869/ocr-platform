@@ -72,6 +72,24 @@ One `.md` per planned file. Mirror tree of the repo. Contract: [`TEMPLATE.md`](T
 
 **Notes:** System docs + ADRs above are authoritative for registration (R0→R0.5), handwriting posture, calibration-before-auto-accept, cloud GPU placement, and phased market form. Per-file specs amended 2026-09-24 to match.
 
+## Implemented evaluation files (2026-10-03)
+
+Independent benchmark modules under `src/ocr_platform/benchmark/` are IMPLEMENTED:
+`dataset.py`, `prepare.py`, `labeler.html`, `engines.py`, `runner.py`, `metrics.py`,
+and `cli.py`. Contracts mirror these paths below this directory. Regression tests
+live in `tests/test_benchmark.py`; packaging is documented in `pyproject.toml.md`.
+See `docs/benchmark.md` and ADR-009. Production targets above remain SPEC.
+
+Experimental flow modules under `src/ocr_platform/flow/` are IMPLEMENTED:
+`adapters.py`, `pipeline.py`, `review.py`, and `cli.py`, with draft rules in
+`configs/flow_rules_v1.json` and regression tests in `tests/test_flow.py`.
+See `docs/flow.md` and ADR-010. Model checkpoints and fine-tuning are not included.
+
+Reproducible local trial inputs are in `configs/document_trial_regions.json`;
+`scripts/prepare_document_trial.py` verifies local source hashes. Relevant tested
+runtime versions are in `configs/flow_trial_constraints.txt`. Results and limits
+are recorded in `docs/test-results/document-trial-2026-10-05.md`.
+
 ## Layout references (external, not in 41)
 
 - `~/Documents/WARD-42/1RN-982-WARD NO-42/95.pdf`–`99.pdf`

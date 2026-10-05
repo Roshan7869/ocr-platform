@@ -6,7 +6,18 @@ Provenance-first OCR / data-extraction platform for the two-page family survey (
 
 ## Status
 
-R0 — docs-first + system design pack. Per-file responsibility specs under `docs/files/`; architecture/accuracy/data/capacity/market/ADR docs under `docs/`. Source lands after **docs gate + data gate + spike** (see plans below).
+R0 production extraction remains a design scaffold. Separate benchmark and annotated-crop OCR/classifier experiments are implemented, with a real two-document trial recorded under `docs/test-results/`. Per-file responsibilities live under `docs/files/`; production implementation still depends on the docs, data and compatibility gates below.
+
+## Engine selection benchmark
+
+The local 1,446 WARD-42 PDFs are a sample of a corpus in the lakhs. A separate
+benchmark now provides deterministic sampling, offline human labeling, Tesseract,
+Google Document AI, and local vision-model adapters, with failure-aware accuracy
+and configurable scale/cost reports. No engine has been selected by measured
+accuracy yet; the production extractor below remains a design scaffold.
+
+Setup and commands: [docs/benchmark.md](docs/benchmark.md). Generated labels and
+reports stay under ignored `runs/`; raw data and its ZIP stay under ignored `data/`.
 
 ## Milestone
 
@@ -47,6 +58,14 @@ docs/                 architecture, plans, ADRs
 docs/files/           one .md per planned file (spec tree)
 tests/                unit + integration
 ```
+
+## Experimental OCR and classifier flow
+
+The annotated-crop CLI connects local PaddleOCR recognition, field validation,
+Laya occupation classification, and human review with immutable evidence.
+Run `.venv/Scripts/python.exe -m ocr_platform.flow.cli demo` for a simulated smoke test.
+See [docs/flow.md](docs/flow.md) for real checkpoint setup and testing.
+This is an experiment; whole-form extraction and fine-tuning are not implemented.
 
 ## Docs contract
 

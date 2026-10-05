@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "draft": true,
+  "ocr_min_confidence": 0.5,
+  "classification_min_confidence": 0.8,
+  "rules": [
+    {"pattern": "member.*age", "type": "integer", "min": 0, "max": 130},
+    {"pattern": "*mobile", "type": "digits", "length": 10},
+    {"pattern": "member.*gender", "type": "code", "aliases": {"M": "male", "F": "female", "पुरुष": "male", "महिला": "female"}},
+    {"pattern": "member.*religion", "type": "code", "aliases": {"H": "H", "M": "M"}},
+    {"pattern": "*occupation", "type": "category", "instructions": "Classify only the written occupation into the listed draft categories. Do not infer from name, religion, gender, income, or family members. Choose UNKNOWN for unreadable, contradictory, or insufficient text.", "categories": {"SALARIED": "Explicit salaried employment / वेतनभोगी नौकरी", "SELF_EMPLOYED": "Explicit self-employment, trade, tailoring, or own shop / स्वरोजगार", "DAILY_WAGE": "Explicit daily wage work / दैनिक मजदूरी", "AGRICULTURE": "Explicit farming / खेती", "OTHER": "Clearly stated occupation outside these categories", "UNKNOWN": "Missing, unreadable, ambiguous, or insufficient occupation"}},
+    {"pattern": "*name", "type": "text"},
+    {"pattern": "document.ward", "type": "integer", "min": 1, "max": 9999}
+  ]
+}

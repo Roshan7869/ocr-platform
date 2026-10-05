@@ -6,6 +6,13 @@ Owner split: **survey** = field catalog, codebooks, bbox approval, redaction app
 
 ---
 
+**2026-10-03 update:** The 1,446 PDFs are now available locally under
+`data/WARD-42/WARD-42/`, as a pilot sample of a wider corpus in the lakhs.
+They remain unclassified and are not registered production fixtures. The
+independent evaluation workflow in `docs/benchmark.md` permits local annotation
+and benchmark experiments; API upload requires classified inputs plus explicit
+opt-in. No gold answers are inferred from the mere presence of these files.
+
 ## 1. Principles
 
 1. **No pipeline open** of real survey PDFs without manifest classification (`synthetic` \| `approved_redacted`).
