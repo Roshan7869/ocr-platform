@@ -9,6 +9,13 @@ System design SoT for R0–R2. Per-file contracts remain authoritative under `do
 
 ## 1. Component map
 
+**2026-10-05 implementation scope:** `benchmark/`, `flow/` and `training/`
+are isolated local experiments authorized in ADR-009/010/011. They use annotated
+crops and draft rules, and do not implement the production layers below.
+Their metadata/provenance checks do not certify canonical export or R0 completion.
+See `docs-audit-2026-10-05.md`; production registration, templates, row detection,
+fixture approvals and acceptance calibration remain planned.
+
 ```text
                     ┌─────────────────────────────────────────────────────────┐
                     │                     TRUST BOUNDARY                     │

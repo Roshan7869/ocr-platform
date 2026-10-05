@@ -65,7 +65,11 @@ The annotated-crop CLI connects local PaddleOCR recognition, field validation,
 Laya occupation classification, and human review with immutable evidence.
 Run `.venv/Scripts/python.exe -m ocr_platform.flow.cli demo` for a simulated smoke test.
 See [docs/flow.md](docs/flow.md) for real checkpoint setup and testing.
-This is an experiment; whole-form extraction and fine-tuning are not implemented.
+This is an experiment; whole-form extraction is not implemented.
+Local Laya classifier head fine-tuning is now implemented and was run in two
+small pilots, without measured improvement. PaddleOCR fine-tuning is still
+pending. See [fine-tuning outcomes](docs/test-results/fine-tuning-pilot-2026-10-05.md)
+and the [documentation audit](docs/docs-audit-2026-10-05.md).
 
 ## Docs contract
 

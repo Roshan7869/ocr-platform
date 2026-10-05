@@ -39,6 +39,7 @@ packages = ["src/ocr_platform"]
 [project.scripts]
 ocr-benchmark = "ocr_platform.benchmark.cli:main"
 ocr-flow = "ocr_platform.flow.cli:main"
+ocr-train = "ocr_platform.training.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

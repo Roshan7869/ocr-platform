@@ -101,21 +101,33 @@ def validate_text(text: str, rule: dict | None) -> dict:
     if len(text) > 1024:
         return {"ok": False, "normalized": None, "reasons": ["TEXT_TOO_LONG"]}
     if text in {'"', '""', "〃", "”", "''", "ditto", "Ditto"}:
-        return {"ok": False, "normalized": None, "reasons": ["UNRESOLVED_DITTO"]}
+        return {"ok": False, "normalized": None, "reasons": ["DITTO_UNRESOLVED"]}
     if rule is None:
         return {"ok": False, "normalized": None, "reasons": ["UNCONFIGURED_FIELD"]}
     numeric = "".join(str(unicodedata.decimal(c)) if c.isdecimal() else c for c in text)
     kind = rule["type"]
     if kind == "integer":
         if not numeric.isascii() or not numeric.isdigit():
-            return {"ok": False, "normalized": None, "reasons": ["INVALID_INTEGER"]}
+            return {
+                "ok": False,
+                "normalized": None,
+                "reasons": ["INVALID_NUMERIC", "INVALID_INTEGER"],
+            }
         value = int(numeric)
         if not rule["min"] <= value <= rule["max"]:
-            return {"ok": False, "normalized": None, "reasons": ["INTEGER_OUT_OF_RANGE"]}
+            return {
+                "ok": False,
+                "normalized": None,
+                "reasons": ["INVALID_NUMERIC", "INTEGER_OUT_OF_RANGE"],
+            }
         return {"ok": True, "normalized": value, "reasons": []}
     if kind == "digits":
         if not numeric.isascii() or not numeric.isdigit() or len(numeric) != rule["length"]:
-            return {"ok": False, "normalized": None, "reasons": ["INVALID_DIGIT_SEQUENCE"]}
+            return {
+                "ok": False,
+                "normalized": None,
+                "reasons": ["INVALID_NUMERIC", "INVALID_DIGIT_SEQUENCE"],
+            }
         return {"ok": True, "normalized": numeric, "reasons": []}
     if kind == "code":
         value = rule["aliases"].get(text)
@@ -139,6 +151,8 @@ def checked_crop(folder: Path, row: dict) -> bytes:
 
 def decide(row: dict, config: dict, classifier) -> dict:
     reasons = ["AUTO_ACCEPT_DISABLED"]
+    if row.get("kind") == "handwriting":
+        reasons.append("HANDWRITING_SUSPECTED")
     if config["draft"]:
         reasons.append("DRAFT_RULES")
     validation = validate_text(row["text"], field_rule(row["field_id"], config))
@@ -149,11 +163,11 @@ def decide(row: dict, config: dict, classifier) -> dict:
     if not probability(score):
         reasons.append("OCR_CONFIDENCE_UNAVAILABLE")
     elif score < config["ocr_min_confidence"]:
-        reasons.append("LOW_OCR_CONFIDENCE")
+        reasons.append("OCR_CONFIDENCE_LOW")
     classification = None
     rule = field_rule(row["field_id"], config)
     if validation["ok"] and row["status"] == "ok" and rule["type"] == "category":
-        if "LOW_OCR_CONFIDENCE" in reasons or "OCR_CONFIDENCE_UNAVAILABLE" in reasons:
+        if "OCR_CONFIDENCE_LOW" in reasons or "OCR_CONFIDENCE_UNAVAILABLE" in reasons:
             reasons.append("CLASSIFICATION_SKIPPED_UNCERTAIN_OCR")
         else:
             try:
@@ -175,7 +189,7 @@ def decide(row: dict, config: dict, classifier) -> dict:
     return {
         "raw_text": row["text"],
         "ocr_confidence": score,
-        "value_state": "present" if row["text"].strip() else "unknown",
+        "value_state": "present" if row["text"].strip() and validation["ok"] else "unknown",
         "validation": validation,
         "classification": classification,
         "disposition": "review",
@@ -199,7 +213,7 @@ def classify_run(ocr_folder: Path, output: Path, config: dict, classifier) -> di
     # Complete evidence preflight before any classifier invocation.
     crops = {key: checked_crop(ocr_folder, row) for key, row in latest.items()}
     identity = {
-        "flow_version": 1,
+        "flow_version": 2,
         "ocr_identity": ocr_identity,
         "ocr_predictions_sha256": digest(canonical({str(k): v for k, v in latest.items()})),
         "rules": config,
@@ -247,6 +261,7 @@ def classify_run(ocr_folder: Path, output: Path, config: dict, classifier) -> di
                         "document_sha256": row["document_sha256"],
                         "page": row["page"],
                         "bbox": row["bbox"],
+                        "coordinate_system": "image_top_left_normalized",
                         "crop_sha256": row["crop_sha256"],
                         "crop_path": f"crops/{row['crop_sha256']}.png",
                     },

@@ -18,7 +18,8 @@ flow modules and benchmark dataset.
 
 ## Tests
 
-31 combined benchmark and flow tests.
+Flow routing, canonical reason registry, value-state semantics, checkpoint
+compatibility, human revisions and evidence/resume regression tests.
 
 ## Milestone
 

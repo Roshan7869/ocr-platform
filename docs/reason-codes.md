@@ -83,6 +83,38 @@ The 14-item hard-review list from `acceptance_policy_v1.yaml.md:12`, canonicaliz
 
 ---
 
+### Experimental crop/classifier additions (2026-10-05)
+
+The experimental flow uses the canonical `OCR_CONFIDENCE_LOW`, `DITTO_UNRESOLVED`,
+`INVALID_NUMERIC`, `UNKNOWN_VOCABULARY_CODE` and `HANDWRITING_SUSPECTED` tokens.
+The following additional tokens are registered for experimental review routing;
+they do not enable production acceptance or replace AcceptancePolicy-v1.
+
+| Code | Condition |
+|---|---|
+| `AUTO_ACCEPT_DISABLED` | Every model observation remains in review |
+| `DRAFT_RULES` | Survey codebook/rules are still draft |
+| `EMPTY_OCR` | Recognition returned no usable text; absence is not inferred |
+| `TEXT_TOO_LONG` | Input exceeds the experiment's field-text cap |
+| `UNCONFIGURED_FIELD` | No matching experimental field rule |
+| `INVALID_INTEGER` | Integer syntax failed; accompanies INVALID_NUMERIC |
+| `INTEGER_OUT_OF_RANGE` | Integer bound failed; accompanies INVALID_NUMERIC |
+| `INVALID_DIGIT_SEQUENCE` | Digit syntax/length failed; accompanies INVALID_NUMERIC |
+| `OCR_FAILED` | Recognition backend failed |
+| `OCR_CONFIDENCE_UNAVAILABLE` | Missing or invalid recognition confidence |
+| `CLASSIFICATION_SKIPPED_UNCERTAIN_OCR` | OCR gate blocked the category model |
+| `INVALID_CLASSIFIER_RESPONSE` | Invalid category or confidence |
+| `UNKNOWN_CATEGORY` | Category model returned UNKNOWN |
+| `LOW_CLASSIFICATION_CONFIDENCE` | Category confidence below the draft routing cutoff |
+| `CLASSIFIER_FAILED` | Category inference failed |
+
+Flow v1 artifacts used LOW_OCR_CONFIDENCE and UNRESOLVED_DITTO. Flow v2 emits
+the canonical tokens above, records declared handwriting explicitly, and attaches
+`coordinate_system=image_top_left_normalized` to new evidence. Existing immutable
+artifacts are not rewritten. Experimental CLIs use exit 0 for completed runs,
+1 for backend failures, and 2 for invalid inputs/dependencies; these are separate
+from the planned production extract.py exit-code contract.
+
 ## 3. Not reason codes (do not confuse)
 
 These tokens appear in the specs but are **not** dispositions or reason codes:

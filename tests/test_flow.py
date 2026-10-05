@@ -47,7 +47,7 @@ class FlowTests(unittest.TestCase):
         self.assertFalse(validate_text("3O", age)["ok"])
         code = {"type": "code", "aliases": {"M": "male"}}
         self.assertFalse(validate_text("m", code)["ok"])
-        self.assertIn("UNRESOLVED_DITTO", validate_text('"', code)["reasons"])
+        self.assertIn("DITTO_UNRESOLVED", validate_text('"', code)["reasons"])
 
     def test_uncertain_ocr_never_reaches_classifier(self):
         classifier = DemoClassifier()
@@ -56,6 +56,25 @@ class FlowTests(unittest.TestCase):
                 result = decide({**self.row, "confidence": confidence}, self.config, classifier)
                 self.assertIsNone(result["classification"])
             backend.assert_not_called()
+
+    def test_docs_reason_codes_and_value_state(self):
+        registry = Path("docs/reason-codes.md").read_text(encoding="utf-8")
+        for row in [
+            {**self.row, "kind": "handwriting", "confidence": 0.1},
+            {**self.row, "field_id": "member.row1.gender", "text": "X"},
+            {**self.row, "field_id": "member.row1.age", "text": "999"},
+            {**self.row, "text": '"'},
+        ]:
+            result = decide(row, self.config, DemoClassifier())
+            for reason in result["reason_codes"]:
+                self.assertIn(f"`{reason}`", registry)
+            if not result["validation"]["ok"]:
+                self.assertEqual(result["value_state"], "unknown")
+        result = decide(
+            {**self.row, "kind": "handwriting", "confidence": 0.1}, self.config, DemoClassifier()
+        )
+        self.assertIn("HANDWRITING_SUSPECTED", result["reason_codes"])
+        self.assertIn("OCR_CONFIDENCE_LOW", result["reason_codes"])
 
     def test_unknown_low_confidence_and_failure_routes(self):
         classifier = DemoClassifier()

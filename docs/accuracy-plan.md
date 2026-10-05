@@ -178,6 +178,12 @@ Full 1,446-doc gold is **out of scope** until product requires it.
 
 ## 7. Update log
 
+**2026-10-05 experimental update:** E3 has a two-document crop trial and a
+ten-form visual inspection, not the planned dev-gold prevalence study. Two local
+Laya head-training pilots completed without measured improvement. No production
+registration/row, handwriting-acceptance or calibration gate is complete.
+See `test-results/fine-tuning-pilot-2026-10-05.md` and the docs audit.
+
 | Date | Change |
 |---|---|
 | 2026-09-24 | Initial plan from corpus measurements + locked decisions (identity→R0.5 affine, handwriting review-only, calibration before accept) |

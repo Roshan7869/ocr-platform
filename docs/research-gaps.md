@@ -1,5 +1,11 @@
 # Research gaps — ocr-platform
 
+**2026-10-05 evidence update:** local OCR/classifier inference and two classifier
+head-training pilots are recorded in `docs/test-results/`. They provide partial
+CPU compatibility and error evidence, not a production spike, handwriting gold
+benchmark or successful adaptation. RG-13/14/16 remain open; independent labels,
+production calibration and the approved survey codebook are still required.
+
 Consolidated register of genuine **unknowns** — questions that need a spike, experiment, measurement, or external sign-off before a decision can be locked. This is the single backlog of open questions; individual docs (spike, `accuracy-plan` E1–E4, ADRs) own the *work*, this file owns the *tracking* so nothing stays implicitly "TBD".
 
 **Invariant:** `FINAL_VALUE MUST NEVER EXIST WITHOUT PROVENANCE`

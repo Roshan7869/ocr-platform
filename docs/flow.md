@@ -1,6 +1,6 @@
 # Experimental PaddleOCR → validation → Laya → human review
 
-This CLI tests human-selected answer crops from survey PDFs. It does not yet locate table rows, register templates, detect answer boxes, process checkboxes, or extract complete households automatically. It can use real local model checkpoints; the demo uses simulated responses. Nothing has been fine-tuned yet.
+This CLI tests human-selected answer crops from survey PDFs. It does not yet locate table rows, register templates, detect answer boxes, process checkboxes, or extract complete households automatically. It can use real local model checkpoints; the demo uses simulated responses. Two local Laya classifier-head training pilots have now completed without measured improvement; see [fine-tuning results](test-results/fine-tuning-pilot-2026-10-05.md). PaddleOCR remains unfine-tuned.
 
 PaddleOCR reads the crop. Deterministic checks validate age, digits, exact codes, blank answers and ditto marks. Laya suggests a category for occupation text only. Every model decision starts in human review with null final values. A human correction supplies the accepted value and category, linked to the original crop and decision.
 

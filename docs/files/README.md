@@ -90,6 +90,12 @@ Reproducible local trial inputs are in `configs/document_trial_regions.json`;
 runtime versions are in `configs/flow_trial_constraints.txt`. Results and limits
 are recorded in `docs/test-results/document-trial-2026-10-05.md`.
 
+Local classifier-training modules under `src/ocr_platform/training/` are
+IMPLEMENTED; per-file contracts mirror dataset.py, classifier.py and cli.py.
+CI now runs `scripts/check_docs_contract.py`; tests cover its presence/status
+checks and training data gates. See `docs/fine-tuning.md`, ADR-011 and
+`docs/docs-audit-2026-10-05.md`. Pilot candidates showed no improvement.
+
 ## Layout references (external, not in 41)
 
 - `~/Documents/WARD-42/1RN-982-WARD NO-42/95.pdf`–`99.pdf`

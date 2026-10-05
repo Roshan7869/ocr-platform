@@ -71,7 +71,9 @@ E3 experiment: measure handwriting prevalence on dev-gold
 
 ### 4.3 VLM-assisted review (optional)
 
-- VLM (e.g., Laya) suggests value
+- A vision model may suggest a transcription. Laya is a text-only decision model:
+  in the current experiment it classifies occupation text after OCR, and cannot
+  read handwriting from a crop.
 - Reviewer sees: crop + VLM suggestion + "confirm or correct" prompt
 - Reviewer action: confirm or correct
 

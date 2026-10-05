@@ -6,6 +6,9 @@ Run the implemented benchmark's regression checks on pushes and pull requests.
 
 ## Contracts
 
+Runs the implemented-file docs gate alongside lint/format/regression tests.
+Does not claim the production nightly/spike/Docker gates are complete.
+
 Use Python 3.11 and dev/benchmark extras; run lint, format checks, and tests.
 No real survey data, model downloads, API credentials, or provider calls in CI.
 This is benchmark verification, not the broader unimplemented CI plan.

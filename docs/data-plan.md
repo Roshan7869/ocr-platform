@@ -15,6 +15,13 @@ opt-in. No gold answers are inferred from the mere presence of these files.
 
 ## 1. Principles
 
+**2026-10-05 local experiment scope:** The user authorized inspecting the local
+data and running fine-tuning pilots. These experiments may read unclassified
+local PDFs without registering them as production fixtures. Engineering visual
+drafts and synthetic prototypes are not human gold, require explicit pilot
+mode, and stay local with crop evidence. Model outputs are never training truth.
+Production fixture/redaction approvals and independent-label QA remain required.
+
 1. **No pipeline open** of real survey PDFs without manifest classification (`synthetic` \| `approved_redacted`).
 2. **No git commit** of real PDFs until classification + path policy allow (`.gitignore` already blocks `*.pdf` except `fixtures/**/*.pdf`).
 3. Smoke ≠ gold; promotion claims need holdout (`fixtures/loader.py`, `docs/accuracy-plan.md`).

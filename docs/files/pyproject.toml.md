@@ -10,6 +10,8 @@ Production Paddle pins remain deferred to the spike. Optional benchmark installs
 
 The optional flow extra adds experimental PaddleOCR/PaddlePaddle/Laya dependencies;
 it does not download checkpoints. The dev extra includes numpy for adapter tests.
+The ocr-train entry point validates supervision or runs local classifier pilots;
+the official Laya training source must be provided separately.
 
 Outputs are evaluation-only artifacts. See docs/benchmark.md and ADR-009.
 

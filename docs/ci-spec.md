@@ -9,6 +9,11 @@ Automated enforcement of the docs contract and quality gates. The R0 exit gate r
 
 ## 1. Triggers
 
+**Current experimental CI (2026-10-05):** the benchmark workflow runs lint,
+formatting, regression tests and `scripts/check_docs_contract.py` on push/PR.
+The production spike, nightly determinism, Docker smoke and GitNexus verification
+below remain planned. Green experimental CI is not a full R0 exit gate.
+
 | Trigger | What runs | Why |
 |---|---|---|
 | **Pull request** | Lint + unit + contract + property + docs-gate | Fast feedback; no expensive integration |
