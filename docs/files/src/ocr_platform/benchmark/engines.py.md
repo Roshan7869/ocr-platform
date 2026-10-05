@@ -33,4 +33,3 @@ IMPLEMENTED (not GitNexus VERIFIED).
 ## Owner
 
 engineering; survey owns human transcription and data classification.
-

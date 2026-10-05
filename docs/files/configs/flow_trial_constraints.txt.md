@@ -31,4 +31,3 @@ IMPLEMENTED (not GitNexus VERIFIED).
 ## Owner
 
 engineering; survey owns independently verified ground truth.
-
