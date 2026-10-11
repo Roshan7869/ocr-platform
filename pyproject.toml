@@ -16,6 +16,12 @@ dependencies = [
   "pyyaml>=6.0",
   "pypdf>=4.2",
   "pillow>=10.3",
+  "pypdfium2>=4.30,<6",
+  "paddleocr>=3.0,<4",
+  "paddlepaddle>=3.0,<4",
+  "laya>=0.3.26,<0.4",
+  "sentence-transformers>=3.0",
+  "rapidfuzz>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +46,7 @@ packages = ["src/ocr_platform"]
 ocr-benchmark = "ocr_platform.benchmark.cli:main"
 ocr-flow = "ocr_platform.flow.cli:main"
 ocr-train = "ocr_platform.training.cli:main"
+ocr-survey = "ocr_platform.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

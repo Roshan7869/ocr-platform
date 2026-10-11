@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "draft": false,
+  "ocr_min_confidence": 0.50,
+  "classification_min_confidence": 0.80,
+  "evidence_threshold": 0.88,
+  "rules": [
+    {"pattern": "sr_no", "type": "integer", "min": 1, "max": 50},
+    {"pattern": "age", "type": "integer", "min": 0, "max": 130},
+    {"pattern": "marriage_age", "type": "integer", "min": 10, "max": 100},
+    {"pattern": "monthly_income", "type": "digits", "length": 10},
+    {"pattern": "gender", "type": "code", "aliases": {"M": "पुरुष", "F": "महिला", "पुरुष": "पुरुष", "महिला": "महिला", "पु": "पुरुष", "स्त्री": "महिला", "म": "महिला", "अन्य": "अन्य", "T": "अन्य"}},
+    {"pattern": "relation", "type": "code", "aliases": {"स्वयं": "स्वयं", "स्वय": "स्वयं", "मुखिया": "स्वयं", "HEAD": "स्वयं", "SELF": "स्वयं", "पति": "पति", "पत्नी": "पत्नी", "बेटा": "बेटा", "बेटी": "बेटी", "पुत्र": "पुत्र", "पुत्री": "पुत्री", "पिता": "पिता", "माता": "माता", "भाई": "भाई", "बहन": "बहन", "बहू": "बहू"}},
+    {"pattern": "religion", "type": "code", "aliases": {"हिन्दू": "हिन्दू", "हिं": "हिन्दू", "मुस्लिम": "मुस्लिम", "सिख": "सिख", "ईसाई": "ईसाई", "जैन": "जैन", "पार्सी": "पार्सी", "बौद्ध": "बौद्ध", "अन्य": "अन्य"}},
+    {"pattern": "caste_category", "type": "code", "aliases": {"सामान्य": "सामान्य", "अनुसूचित जाति": "अनुसूचित जाति", "अनुसूचित जनजाति": "अनुसूचित जनजाति", "पिछड़ा वर्ग": "पिछड़ा वर्ग", "OBC": "पिछड़ा वर्ग", "SC": "अनुसूचित जाति", "ST": "अनुसूचित जनजाति", "GEN": "सामान्य"}},
+    {"pattern": "marital_status", "type": "code", "aliases": {"अविवाहित": "अविवाहित", "कुंवारी": "अविवाहित", "कुंवारे": "अविवाहित", "विवाहित": "विवाहित", "विधवा": "विधवा", "विधवे": "विधवा", "अलग": "अलग", "अन्य": "अन्य"}},
+    {"pattern": "resident_code", "type": "code", "aliases": {"1": "1", "स्थायी": "1", "2": "2", "आस्थायी": "2", "3": "3", "अन्य": "3", "4": "4"}},
+    {"pattern": "bank_account", "type": "code", "aliases": {"हां": "हां", "नहीं": "नहीं", "Y": "हां", "N": "नहीं", "1": "हां", "0": "नहीं"}},
+    {"pattern": "*name", "type": "text"},
+    {"pattern": "*occupation", "type": "category", "instructions": "Classify the written occupation. Choose UNKNOWN if unreadable or insufficient text.", "categories": {"SALARIED": "वेतनभोगी नौकरी", "SELF_EMPLOYED": "स्वरोजगार / दुकान", "DAILY_WAGE": "दैनिक मजदूरी", "AGRICULTURE": "खेती", "OTHER": "अन्य", "UNKNOWN": "पढ़ने योग्य नहीं"}},
+    {"pattern": "*education", "type": "category", "instructions": "Classify education level. Choose UNKNOWN if unreadable.", "categories": {"ILLITERATE": "अपढ़", "PRIMARY": "प्राथमिक", "MIDDLE": "मध्यम", "HIGH_SCHOOL": "उच्च प्राथमिक", "INTERMEDIATE": "इंटरमीडिएट", "GRADUATE": "स्नातक", "POST_GRADUATE": "परास्नातक", "OTHER": "अन्य", "UNKNOWN": "पढ़ने योग्य नहीं"}},
+    {"pattern": "*caste", "type": "text"},
+    {"pattern": "*remarks", "type": "text"}
+  ]
+}
