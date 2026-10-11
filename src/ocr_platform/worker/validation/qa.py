@@ -27,6 +27,10 @@ class QAAnomaly:
     explanation: str
 
 
+MALE_RELATIONS = {"स्वयं", "पति", "पुत्र", "पिता", "भाई", "पोता", "ससुर"}
+FEMALE_RELATIONS = {"पत्नी", "पुत्री", "माता", "बहन", "बहू", "पोती", "सास"}
+
+
 class RelationalQA:
     """Validate household business rules after all members are extracted."""
 
@@ -62,7 +66,37 @@ class RelationalQA:
                 explanation=f"Expected 1 head, found {len(heads)}",
             ))
 
-        # Rule 2: father must be ≥ 18
+        # Find head row and head age
+        head_idx = None
+        head_age = 0
+        for i, m in enumerate(members):
+            rel = m.get("relation", "").strip()
+            if rel in ("स्वयं", "मुखिया", "HEAD", "SELF"):
+                head_idx = i
+                try:
+                    head_age = int(m.get("age", 0))
+                except (TypeError, ValueError):
+                    head_age = 0
+                break
+
+        # Rule 2: no spouse without a head
+        if any(m.get("relation", "").strip() in ("पत्नी", "पति") for m in members) and head_idx is None:
+            anoms.append(QAAnomaly(
+                anomaly_id=f"{doc_id}_spouse_no_head", doc_id=doc_id, row_idx=-1,
+                field_key="relation", rule="spouse_without_head", severity="high",
+                value="", ctx="spouse row found but no head",
+                explanation="Spouse exists but head not found",
+            ))
+
+        for i, m in enumerate(members):
+            rel = m.get("relation", "").strip()
+            gender = m.get("gender", "").strip()
+            try:
+                age = int(m.get("age", 0))
+            except (TypeError, ValueError):
+                age = 0
+
+            # Rule 3: father must be ≥ 18
         for i, m in enumerate(members):
             try:
                 age = int(m.get("age", 0))

@@ -23,8 +23,9 @@ from ocr_platform.export.writer import ExportEngine
 from ocr_platform.laya.config import LayaConfig
 from ocr_platform.laya.pipeline import CellDecision, LayaPipeline
 from ocr_platform.worker.arbiter import Arbiter
+from ocr_platform.worker.hindi_vlm import HindiVLMEngine
 from ocr_platform.worker.morphology import ContourMorphologyEngine
-from ocr_platform.worker.normalizer import SpatialNormalizer
+from ocr_platform.worker.normalizer import NO_DITTO_FIELDS, SpatialNormalizer
 from ocr_platform.worker.provenance.store import EvidenceStore
 from ocr_platform.worker.semantic import SemanticEngine
 from ocr_platform.worker.validation.qa import RelationalQA
@@ -74,7 +75,8 @@ class SurveyPipeline:
 
         # OCR engines (lazy init — loaded once per run)
         self._paddle = None
-        self._hindi_vlm = None
+        self._paddle_en = None
+        self._swift_engine = HindiVLMEngine()  # MS-SWIFT + HindiOCR-VLM LoRA
         self._indic = None
 
         # Load template
@@ -110,18 +112,15 @@ class SurveyPipeline:
         except Exception as e:
             print(f"  [M03] PaddleOCR init failed: {e}")
 
-    def _init_vlm(self):
-        if self._hindi_vlm is not None:
+    def _init_paddle_en(self):
+        if self._paddle_en is not None:
             return
         try:
-            from transformers import AutoProcessor, AutoModelForVision2Seq
-            print("  [M03] Loading HindiOCR-VLM...")
-            p = AutoProcessor.from_pretrained("HindiOCR-VLM/HindiOCR-VLM", trust_remote_code=True)
-            m = AutoModelForVision2Seq.from_pretrained("HindiOCR-VLM/HindiOCR-VLM", trust_remote_code=True)
-            self._hindi_vlm = (p, m)
-            print("  [M03] HindiOCR-VLM ready.")
+            from paddleocr import PaddleOCR
+            self._paddle_en = PaddleOCR(use_angle_cls=False, lang="en", show_log=False)
+            print("  [M03] PaddleOCR en ready.")
         except Exception as e:
-            print(f"  [M03] HindiOCR-VLM load failed: {e}")
+            print(f"  [M03] PaddleOCR EN init failed: {e}")
 
     def _init_indic(self):
         if self._indic is not None:
@@ -140,36 +139,36 @@ class SurveyPipeline:
     # OCR dispatch
     # ------------------------------------------------------------------
 
-    def _run_paddle(self, crop: np.ndarray) -> dict[str, Any] | None:
+    def _run_paddle(self, crop: np.ndarray, lang: str = "devanagari") -> dict[str, Any] | None:
         self._init_paddle()
         if self._paddle is None:
             return None
         try:
             padded = cv2.copyMakeBorder(crop, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=(255, 255, 255))
             results = self._paddle.ocr(padded, cls=False, rec=True, det=False)
-            if results and results[0]:
-                txt, conf = results[0][0][1]
-                return {"value": txt, "conf": float(conf), "engine": "paddle"}
+            best_txt, best_conf = "", 0.0
+            if results:
+                for page_result in results:
+                    if not page_result:
+                        continue
+                    for item in page_result:
+                        txt = (item[0] or "").strip() if isinstance(item[0], str) else str(item[0]).strip()
+                        conf = float(item[1]) if len(item) > 1 else 0.0
+                        if conf > best_conf:
+                            best_txt, best_conf = txt, conf
+            if best_txt and best_conf > 0.0:
+                return {"value": best_txt, "conf": best_conf, "engine": f"paddle_{lang}"}
         except Exception as e:
             print(f"  [M03] PaddleOCR err: {e}")
         return None
 
+    def _run_paddle_en(self, crop: np.ndarray) -> dict[str, Any] | None:
+        """English pass for Latin text fields (enumerator, dates, income, education codes)."""
+        return self._run_paddle(crop, lang="en")
+
     def _run_vlm(self, crop: np.ndarray) -> dict[str, Any] | None:
-        self._init_vlm()
-        if self._hindi_vlm is None:
-            return None
-        proc, model = self._hindi_vlm
-        try:
-            from PIL import Image
-            padded = cv2.copyMakeBorder(crop, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=(255, 255, 255))
-            rgb = cv2.cvtColor(padded, cv2.COLOR_BGR2RGB)
-            inp = proc(Image.fromarray(rgb), text="OCR this Hindi form field. Output only text.", return_tensors="pt")
-            ids = model.generate(**inp, max_new_tokens=128)
-            txt = proc.batch_decode(ids, skip_special_tokens=True)[0].strip()
-            return {"value": txt, "conf": 0.80, "engine": "hindi_vlm"}
-        except Exception as e:
-            print(f"  [M03] HindiOCR-VLM err: {e}")
-        return None
+        """Run HindiOCR-VLM via MS-SWIFT wrapper (falls back to None)."""
+        return self._swift_engine.ocr(crop)
 
     def _run_indic(self, crop: np.ndarray) -> dict[str, Any] | None:
         self._init_indic()
@@ -189,19 +188,31 @@ class SurveyPipeline:
         return None
 
     def _dispatch_ocr(self, cell_id: str, field_key: str, crop: np.ndarray, handwriting: bool) -> dict[str, Any]:
-        """Tiered OCR dispatch — models initialized once per run."""
-        candidates = []
-        p = self._run_paddle(crop)
+        """Tiered OCR dispatch — Hindi + English pass for Latin-mixed fields."""
+        candidates: list[dict[str, Any]] = []
+
+        # Hindi pass (always)
+        p = self._run_paddle(crop, lang="devanagari")
         if p:
-            candidates.append({"value": p["value"], "conf": p["conf"], "engine": p["engine"]})
-        if handwriting or (p and p["conf"] < 0.85):
+            candidates.append(p)
+
+        # English pass for fields that may contain Latin text
+        if field_key in {"enumerator_name", "enumerator_mobile", "head_name",
+                         "member_name", "monthly_income", "education",
+                         "survey_date", "occupation", "employment_nature"}:
+            en = self._run_paddle_en(crop)
+            if en:
+                candidates.append(en)
+
+        # VLM fallback for low-confidence or handwriting
+        if handwriting or (candidates and all(c["conf"] < 0.85 for c in candidates)):
             v = self._run_vlm(crop)
             if v:
-                candidates.append({"value": v["value"], "conf": v["conf"], "engine": v["engine"]})
+                candidates.append(v)
         if candidates and all(c["conf"] < 0.85 for c in candidates):
             ind = self._run_indic(crop)
             if ind:
-                candidates.append({"value": ind["value"], "conf": ind["conf"], "engine": ind["engine"]})
+                candidates.append(ind)
         # Deduplicate
         seen: set[str] = set()
         unique: list[dict[str, Any]] = []
@@ -225,7 +236,7 @@ class SurveyPipeline:
 
     def _register_and_slice(self, img_bgr: np.ndarray, page_sha256: str, run_id: str, out_dir: Path, doc_id: str) -> list[dict] | None:
         """Warp to canonical template and slice into cell ROIs."""
-        # Find corners via convex hull
+        h_img, w_img = img_bgr.shape[:2]
         gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
         bw = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                    cv2.THRESH_BINARY_INV, 11, 2)
@@ -233,7 +244,19 @@ class SurveyPipeline:
         if not cnts:
             print("  [M02] No printed content found.")
             return None
-        hull = cv2.convexHull(np.vstack([c.reshape(-1, 2) for c in cnts]))
+
+        # Filter out full-page border contours (touches >90% of image edge)
+        def is_border(c):
+            x, y, w, hh = cv2.boundingRect(c)
+            return (w > 0.9 * w_img and hh > 0.9 * h_img) or \
+                   (x < 5 and w > 0.9 * w_img) or \
+                   (y < 5 and hh > 0.9 * h_img)
+
+        inner = [c for c in cnts if not is_border(c)]
+        if not inner:
+            inner = cnts  # fallback: no border detected, use all
+
+        hull = cv2.convexHull(np.vstack([c.reshape(-1, 2) for c in inner]))
         quad = cv2.approxPolyDP(hull, 0.02 * cv2.arcLength(hull, True), True)
         if len(quad) != 4:
             x, y, w, h = cv2.boundingRect(hull)
@@ -345,10 +368,14 @@ class SurveyPipeline:
                     continue
 
                 # M05: Normalize
-                norm = self.normalizer.normalize(ocr_res["resolved"], fk)
+                norm_val, norm_flag = self.normalizer.normalize(ocr_res["resolved"], fk)
 
                 # M06: Semantic + ditto
-                sem = self.semantic.process(cell["cell_id"], fk, norm, cell["row_idx"])
+                # Skip ditto propagation for fields that should never inherit
+                sem = self.semantic.process(cell["cell_id"], fk, norm_val, cell["row_idx"])
+                if norm_flag and norm_val:
+                    # Override ditto flag for protected fields
+                    sem["is_ditto"] = False
 
                 # M07: Arbiter
                 arb = self.arbiter.decide(cell["cell_id"], fk, ocr_res)
@@ -369,15 +396,16 @@ class SurveyPipeline:
                 )
 
                 # M09 + evidence store (using Laya's composite score)
+                # Priors only for closed-vocab fields — open vocab gets 0.0
+                p_prior = 0.8 if fk not in CLOSED_VOCAB_FIELDS else 0.8
                 self.store.log_cell(
                     run_id=run_id, cell=cell, ocr_res=ocr_res,
-                    arb_decision=arb.to_dict(),
                     laya_decision={
                         "composite_score": laya_decision.composite_score,
                         "route": laya_decision.route,
                         "requires_human": laya_decision.requires_human,
                         "glyph_type": laya_decision.glyph_type,
-                        "p_prior": 1.0 if fk in {"member_name", "head_name", "remarks", "caste", "occupation", "education", "employment_nature", "monthly_income"} else 0.8,
+                        "p_prior": p_prior,
                         "s_spatial": 1.0,
                         "c_consistency": 0.85 if sem["is_ditto"] else 1.0,
                         "reason": f"S={laya_decision.composite_score} {'>=' if laya_decision.composite_score >= 0.88 else '<'} 0.88",
@@ -386,6 +414,7 @@ class SurveyPipeline:
                     norm_value=final_val,
                     is_ditto=sem["is_ditto"],
                     inherited_from=sem.get("inherited_from", ""),
+                    norm_flag=norm_flag,
                 )
 
                 if laya_decision.requires_human:

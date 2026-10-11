@@ -44,7 +44,7 @@ class EvidenceStore:
                     value TEXT, conf_visual REAL, p_prior REAL, s_spatial REAL,
                     c_consistency REAL, score REAL, route TEXT, reason TEXT,
                     low_conf INTEGER, glyph_type TEXT, engine TEXT,
-                    is_ditto INTEGER, inherited_from TEXT,
+                    is_ditto INTEGER, inherited_from TEXT, norm_flag TEXT,
                     created_at REAL DEFAULT (strftime('%s','now'))
                 );
                 CREATE TABLE IF NOT EXISTS laya_decisions (
@@ -72,10 +72,12 @@ class EvidenceStore:
         with sqlite3.connect(self.db_path) as c:
             c.execute("UPDATE run_meta SET finished_at=?, status='done' WHERE run_id=?", (time.time(), run_id))
 
-    def log_cell(self, run_id: str, cell: dict, ocr_res: dict, arb_decision: dict,
-                 laya_decision: dict, norm_value: str, is_ditto: bool = False,
-                 inherited_from: str = "") -> None:
+    def log_cell(self, run_id: str, cell: dict, ocr_res: dict, laya_decision: dict,
+                 norm_value: str, is_ditto: bool = False,
+                 inherited_from: str = "", norm_flag: str = "") -> None:
         """Log a single cell's evidence."""
+        arb = ocr_res.get("resolved", "")
+        arb_conf = max((c.get("conf", 0.0) for c in ocr_res.get("candidates", [])), default=0.0)
         row = {
             "doc_id": cell.get("doc_id", ""),
             "run_id": run_id,
@@ -83,7 +85,7 @@ class EvidenceStore:
             "row_idx": cell.get("row_idx", 0),
             "field_key": cell.get("field_key", ""),
             "value": norm_value,
-            "conf_visual": arb_decision.get("conf", 0.0),
+            "conf_visual": arb_conf,
             "p_prior": laya_decision.get("p_prior", 0.0),
             "s_spatial": laya_decision.get("s_spatial", 1.0),
             "c_consistency": laya_decision.get("c_consistency", 0.85 if is_ditto else 1.0),
@@ -92,9 +94,10 @@ class EvidenceStore:
             "reason": laya_decision.get("reason", ""),
             "low_conf": 1 if laya_decision.get("requires_human", True) else 0,
             "glyph_type": laya_decision.get("glyph_type", ""),
-            "engine": arb_decision.get("engine", "none"),
+            "engine": ocr_res.get("engine", ""),
             "is_ditto": 1 if is_ditto else 0,
             "inherited_from": inherited_from,
+            "norm_flag": norm_flag,
         }
         cols = list(row.keys())
         placeholders = ",".join("?" * len(cols))
