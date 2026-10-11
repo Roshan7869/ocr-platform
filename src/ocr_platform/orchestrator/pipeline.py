@@ -133,7 +133,8 @@ class SurveyPipeline:
             self._indic = (p, m)
             print("  [M03] IndicOCR ready.")
         except Exception as e:
-            print(f"  [M03] IndicOCR load failed: {e}")
+            self._indic = False  # mark as tried-and-failed to suppress repeat logs
+            print(f"  [M03] IndicOCR unavailable: {e}")
 
     # ------------------------------------------------------------------
     # OCR dispatch
@@ -172,7 +173,7 @@ class SurveyPipeline:
 
     def _run_indic(self, crop: np.ndarray) -> dict[str, Any] | None:
         self._init_indic()
-        if self._indic is None:
+        if not self._indic:
             return None
         proc, model = self._indic
         try:

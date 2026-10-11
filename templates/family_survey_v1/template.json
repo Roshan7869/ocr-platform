@@ -1,0 +1,236 @@
+{
+  "schema_version": "1.0",
+  "page_size": [
+    2281,
+    1706
+  ],
+  "global_anchors": [
+    [
+      0,
+      0
+    ],
+    [
+      2281,
+      0
+    ],
+    [
+      2281,
+      1706
+    ],
+    [
+      0,
+      1706
+    ]
+  ],
+  "column_dividers_top": [
+    0,
+    223,
+    279,
+    300,
+    317,
+    337,
+    356,
+    392,
+    458,
+    612,
+    636,
+    876,
+    935,
+    1052,
+    1226,
+    1304,
+    1483,
+    1602,
+    1832,
+    2128,
+    2238,
+    2281
+  ],
+  "column_dividers_bottom": [
+    0,
+    223,
+    279,
+    300,
+    317,
+    337,
+    356,
+    392,
+    458,
+    612,
+    636,
+    876,
+    935,
+    1052,
+    1226,
+    1304,
+    1483,
+    1602,
+    1832,
+    2128,
+    2238,
+    2281
+  ],
+  "row_dividers": [
+    0,
+    156,
+    202,
+    268,
+    338,
+    383,
+    450,
+    499,
+    523,
+    572,
+    634,
+    701,
+    770,
+    839,
+    881,
+    947,
+    1014,
+    1080,
+    1153,
+    1197,
+    1235,
+    1298,
+    1358,
+    1411,
+    1467,
+    1528,
+    1706
+  ],
+  "header_rows": 5,
+  "members_start_row": 9,
+  "member_table_cols": [
+    "sr_no",
+    "relation",
+    "relation_hindi",
+    "name",
+    "gender",
+    "age",
+    "caste",
+    "religion",
+    "education",
+    "disability_lt40",
+    "disability_gt40",
+    "housing_type",
+    "housing_status",
+    "occupation",
+    "monthly_income",
+    "vehicle",
+    "resident_status_code",
+    "new_address",
+    "migration_nature"
+  ],
+  "fields": {
+    "nagar_nigam": {
+      "page": 1,
+      "row": 0,
+      "col": 0,
+      "col_span": 4
+    },
+    "zone": {
+      "page": 1,
+      "row": 0,
+      "col": 5,
+      "col_span": 3
+    },
+    "ward": {
+      "page": 1,
+      "row": 0,
+      "col": 11,
+      "col_span": 5
+    },
+    "survey_date": {
+      "page": 1,
+      "row": 1,
+      "col": 0,
+      "col_span": 4
+    },
+    "enumerator_name": {
+      "page": 1,
+      "row": 1,
+      "col": 5,
+      "col_span": 7
+    },
+    "enumerator_mobile": {
+      "page": 1,
+      "row": 1,
+      "col": 14,
+      "col_span": 5
+    },
+    "family_type": {
+      "page": 1,
+      "row": 2,
+      "col": 0,
+      "col_span": 4
+    },
+    "head_name": {
+      "page": 1,
+      "row": 2,
+      "col": 5,
+      "col_span": 7
+    },
+    "head_mobile": {
+      "page": 1,
+      "row": 2,
+      "col": 14,
+      "col_span": 5
+    },
+    "solid_waste": {
+      "page": 1,
+      "row": 3,
+      "col": 0,
+      "col_span": 4
+    },
+    "electricity": {
+      "page": 1,
+      "row": 3,
+      "col": 5,
+      "col_span": 3
+    },
+    "avg_power_cut_hours": {
+      "page": 1,
+      "row": 3,
+      "col": 10,
+      "col_span": 7
+    },
+    "housing_type_p1": {
+      "page": 1,
+      "row": 4,
+      "col": 0,
+      "col_span": 4
+    },
+    "ownership_status": {
+      "page": 1,
+      "row": 4,
+      "col": 5,
+      "col_span": 7
+    },
+    "main_occupation": {
+      "page": 1,
+      "row": 4,
+      "col": 14,
+      "col_span": 5
+    }
+  },
+  "page2_fields": {
+    "member_name": 0,
+    "relation_to_head": 1,
+    "gender": 2,
+    "age": 3,
+    "caste": 4,
+    "religion": 5,
+    "education": 6,
+    "disability_lt40": 7,
+    "disability_gt40": 8,
+    "housing_type": 9,
+    "housing_status": 10,
+    "occupation": 11,
+    "monthly_income": 12,
+    "vehicle": 13,
+    "resident_status_code": 14,
+    "new_address": 15,
+    "migration_nature": 16
+  }
+}
