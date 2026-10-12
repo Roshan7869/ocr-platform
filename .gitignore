@@ -1,3 +1,8 @@
 WARD-42/
 page98*.jpg
 *.csv
+*.log
+__pycache__/
+runs/
+*.db
+*.zip

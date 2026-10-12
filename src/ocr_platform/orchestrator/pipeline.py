@@ -146,7 +146,7 @@ class SurveyPipeline:
             return
         try:
             from paddleocr import PaddleOCR
-            self._paddle_en = PaddleOCR(use_angle_cls=False, lang="en", show_log=False)
+            self._paddle_en = PaddleOCR(use_angle_cls=False, lang="en")
             print("  [M03] PaddleOCR en ready.")
         except Exception as e:
             print(f"  [M03] PaddleOCR en init failed: {e}")
