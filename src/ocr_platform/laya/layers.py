@@ -240,24 +240,44 @@ class EvidenceGateLayer(nn.Module):
         self.eval()
 
     def _rule_based(self, conf_visual: float, p_prior: float,
-                    s_spatial: float, c_consistency: float) -> dict:
-        S = (
-            self.WEIGHTS["visual"] * max(0.0, min(1.0, conf_visual))
-            + self.WEIGHTS["prior"] * max(0.0, min(1.0, p_prior))
-            + self.WEIGHTS["spatial"] * max(0.0, min(1.0, s_spatial))
-            + self.WEIGHTS["consistency"] * max(0.0, min(1.0, c_consistency))
-        )
-        S = max(0.0, min(1.0, S))
+                    s_spatial: float, c_consistency: float,
+                    bayesian_posterior: float | None = None,
+                    bayesian_alpha: float | None = None,
+                    prior_n: int = 0) -> dict:
+        """Evidence-weighted composite score.
+
+        If bayesian_posterior is provided, use it directly (posterior from
+        BayesianScorer.score()). Otherwise fall back to the fixed-weight
+        formula for backward compatibility.
+        """
+        if bayesian_posterior is not None:
+            S = max(0.0, min(1.0, bayesian_posterior))
+        else:
+            S = (
+                self.WEIGHTS["visual"] * max(0.0, min(1.0, conf_visual))
+                + self.WEIGHTS["prior"] * max(0.0, min(1.0, p_prior))
+                + self.WEIGHTS["spatial"] * max(0.0, min(1.0, s_spatial))
+                + self.WEIGHTS["consistency"] * max(0.0, min(1.0, c_consistency))
+            )
+            S = max(0.0, min(1.0, S))
         if S >= 0.88:
             return {"composite_score": round(S, 4), "route": "auto",
-                    "requires_human": False, "confidence": S, "mode": "rule"}
+                    "requires_human": False, "confidence": S,
+                    "bayesian_alpha": bayesian_alpha, "prior_n": prior_n,
+                    "mode": "rule"}
         return {"composite_score": round(S, 4), "route": "low_confidence",
-                "requires_human": True, "confidence": 1.0 - S, "mode": "rule"}
+                "requires_human": True, "confidence": 1.0 - S,
+                "bayesian_alpha": bayesian_alpha, "prior_n": prior_n,
+                "mode": "rule"}
 
     def forward(self, conf_visual: float, p_prior: float,
-                s_spatial: float, c_consistency: float) -> dict:
+                s_spatial: float, c_consistency: float,
+                bayesian_posterior: float | None = None,
+                bayesian_alpha: float | None = None,
+                prior_n: int = 0) -> dict:
         if not self.training:
-            return self._rule_based(conf_visual, p_prior, s_spatial, c_consistency)
+            return self._rule_based(conf_visual, p_prior, s_spatial, c_consistency,
+                                    bayesian_posterior, bayesian_alpha, prior_n)
         dev = self.head.net[0].weight.device
         x = _to_tensor([conf_visual, p_prior, s_spatial, c_consistency], dev).unsqueeze(0)
         logits = self.head(x)
@@ -266,6 +286,8 @@ class EvidenceGateLayer(nn.Module):
         w = self.WEIGHTS
         S = w["visual"] * conf_visual + w["prior"] * p_prior + w["spatial"] * s_spatial + w["consistency"] * c_consistency
         S = max(0.0, min(1.0, S))
+        if bayesian_posterior is not None:
+            S = bayesian_posterior
         return {
             "decision": self.LABELS[pred_idx],
             "composite_score": round(S, 4),

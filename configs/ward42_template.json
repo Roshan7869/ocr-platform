@@ -1,10 +1,16 @@
 {
   "schema_version": 1,
-  "page_size": [1240, 1754],
-  "global_anchors": [[110, 75], [1130, 75], [1130, 1675], [110, 1675]],
-  "column_dividers_top": [110, 167, 224, 281, 338, 395, 452, 509, 566, 623, 680, 737, 794, 851, 908, 965, 1022, 1079, 1130],
-  "column_dividers_bottom": [110, 167, 224, 281, 338, 395, 452, 509, 566, 623, 680, 737, 794, 851, 908, 965, 1022, 1079, 1130],
-  "row_divs": [195, 270, 345, 420, 495, 570, 645, 720, 795, 870, 945, 1020, 1095, 1170, 1245, 1320, 1395, 1470, 1545, 1675],
-  "header_zones": {},
-  "notes": "18-column template: 19 dividers produce 18 cells per row. Column width = 57px. sr_no(0)..remarks(17)"
+  "page_size": [833, 617],
+  "global_anchors": [[0, 0], [1262, 0], [1262, 617], [0, 617]],
+  "column_dividers_top": [0, 156, 202, 268, 338, 404, 470, 536, 602, 668, 734, 800, 866, 932, 998, 1064, 1130, 1196, 1262],
+  "column_dividers_bottom": [0, 156, 202, 268, 338, 404, 470, 536, 602, 668, 734, 800, 866, 932, 998, 1064, 1130, 1196, 1262],
+  "row_dividers": [0, 50, 106, 162, 218, 274, 330, 386, 442, 498, 554, 610, 666, 722, 778, 834, 890, 946, 1002, 1058, 1114, 1170, 1226, 1282, 1338, 1394, 1450, 1506, 1562, 1618, 1674],
+  "fields": {},
+  "member_table_cols": [
+    "sr_no", "member_name", "relation", "gender", "age", "marital_status",
+    "marriage_age", "religion", "caste", "caste_category", "education",
+    "occupation", "employment_nature", "monthly_income", "bank_account",
+    "resident_code", "migration_nature", "remarks"
+  ],
+  "notes": "Ward-42 survey form template"
 }

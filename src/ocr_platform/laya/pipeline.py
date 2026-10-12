@@ -40,6 +40,9 @@ class CellDecision:
     requires_human: bool
     evidence_confidence: float
     final_value: str
+    bayesian_posterior: float | None = None
+    bayesian_alpha: float | None = None
+    prior_n: int = 0
     laya_layers: dict = field(default_factory=dict)
 
 
@@ -67,8 +70,17 @@ class LayaPipeline:
 
     def process_cell(self, cell: dict, ocr_result: dict, final_value: str,
                      is_ditto: bool, conf_visual: float, s_spatial: float,
-                     c_consistency: float, field_key: str, closed_vocab_fields: set) -> CellDecision:
-        """Run all 4 cell-level Laya layers on a single cell."""
+                     c_consistency: float, field_key: str, closed_vocab_fields: set,
+                     bayesian_posterior: float | None = None,
+                     bayesian_alpha: float | None = None,
+                     prior_n: int = 0) -> CellDecision:
+        """Run all 4 cell-level Laya layers on a single cell.
+
+        Args:
+            bayesian_posterior: If provided, overrides the fixed-weight composite score.
+            bayesian_alpha: Learning rate used by BayesianScorer (for logging).
+            prior_n: Number of prior observations for this (field_key, glyph_type).
+        """
         self.geometry_gate.eval()
         self.candidate_selector.eval()
         self.semantic_validator.eval()
@@ -97,17 +109,16 @@ class LayaPipeline:
                 raw=raw_text, snapped=snapped, field_key=field_key, closed_vocab_fields=closed_vocab_fields
             )
 
-        # L4: EvidenceGate
-        if field_key in {"member_name", "head_name", "remarks", "caste", "occupation", "education", "employment_nature", "monthly_income"}:
-            p_prior = 1.0
-        else:
-            p_prior = 0.8
+        # L4: EvidenceGate (with Bayesian posterior if available)
         with torch.no_grad():
             l4 = self.evidence_gate(
                 conf_visual=max(0.0, min(1.0, conf_visual)),
                 p_prior=p_prior,
                 s_spatial=max(0.0, min(1.0, s_spatial)),
                 c_consistency=max(0.0, min(1.0, c_consistency)),
+                bayesian_posterior=bayesian_posterior,
+                bayesian_alpha=bayesian_alpha,
+                prior_n=prior_n,
             )
 
         return CellDecision(
@@ -126,6 +137,9 @@ class LayaPipeline:
             requires_human=l4["requires_human"],
             evidence_confidence=l4["confidence"],
             final_value=final_value,
+            bayesian_posterior=bayesian_posterior,
+            bayesian_alpha=bayesian_alpha,
+            prior_n=prior_n,
             laya_layers={"L1": l1, "L2": l2, "L3": l3, "L4": l4},
         )
 

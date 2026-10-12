@@ -58,6 +58,12 @@ class EvidenceStore:
                     current_value TEXT, ctx TEXT, explanation TEXT,
                     created_at REAL DEFAULT (strftime('%s','now'))
                 );
+                CREATE TABLE IF NOT EXISTS field_priors (
+                    field_key TEXT, glyph_type TEXT,
+                    n INT DEFAULT 0, mean REAL DEFAULT 0.5, var REAL DEFAULT 0.25,
+                    updated_at REAL DEFAULT (strftime('%s','now')),
+                    PRIMARY KEY (field_key, glyph_type)
+                );
                 CREATE INDEX IF NOT EXISTS idx_evidence_run ON evidence_log(run_id);
                 CREATE INDEX IF NOT EXISTS idx_laya_run ON laya_decisions(run_id);
                 CREATE INDEX IF NOT EXISTS idx_qa_run ON qa_anomalies(run_id);
@@ -155,3 +161,32 @@ class EvidenceStore:
         with sqlite3.connect(self.db_path) as c:
             c.row_factory = sqlite3.Row
             return [dict(r) for r in c.execute("SELECT * FROM qa_anomalies WHERE run_id=?", (run_id,)).fetchall()]
+
+    def load_previous_runs(self, exclude_run_id: str = "") -> list[dict]:
+        """Load evidence_log rows from all runs except the current one."""
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory = sqlite3.Row
+            query = "SELECT * FROM evidence_log"
+            params = []
+            if exclude_run_id:
+                query += " WHERE run_id != ?"
+                params.append(exclude_run_id)
+            query += " ORDER BY created_at"
+            return [dict(r) for r in c.execute(query, params).fetchall()]
+
+    def load_field_priors(self) -> list[dict]:
+        """Load serialized Bayesian priors for all (field_key, glyph_type) pairs."""
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory = sqlite3.Row
+            rows = c.execute("SELECT * FROM field_priors").fetchall()
+            return [dict(r) for r in rows]
+
+    def save_field_priors(self, priors: list[dict]) -> None:
+        """Upsert Bayesian priors after a run completes."""
+        with sqlite3.connect(self.db_path) as c:
+            for p in priors:
+                c.execute(
+                    """INSERT OR REPLACE INTO field_priors (field_key, glyph_type, n, mean, var, updated_at)
+                       VALUES (?, ?, ?, ?, ?, strftime('%s','now'))""",
+                    (p["field_key"], p["glyph_type"], p["n"], p["mean"], p["var"]),
+                )
