@@ -73,6 +73,16 @@ The 14-item hard-review list from `acceptance_policy_v1.yaml.md:12`, canonicaliz
 | `WRONG_TEMPLATE` | Field context indicates a different template | `review` | proposed |
 | `HANDWRITING_SUSPECTED` | Handwriting detected on a text field (ADR-004) → force review | `review` | tokenized (`acceptance_policy_v1.yaml.md:14`) |
 
+### 2.3.1 Gate-emitted (provenance hard gate)
+
+Emitted by `worker/provenance/validator.py` when an accepted value fails the
+portable referential-integrity gate. The decision is demoted to `review` and its
+`final_value` dropped; evidence is retained, never deleted.
+
+| Code | Fires when | Disposition | Status |
+|---|---|---|---|
+| `PROVENANCE_INCOMPLETE` | Accepted/corrected decision fails the provenance gate (missing evidence node, wrong evidence type for the value state, missing page artifact, unverified node hash, broken revision link, missing registration) | `review` | tokenized (`validator.py`) |
+
 ### 2.4 Row-level (dynamic table, R0 exit on layout refs)
 
 | Code | Fires when | Disposition | Status |

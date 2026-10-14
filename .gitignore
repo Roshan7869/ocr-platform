@@ -6,3 +6,8 @@ __pycache__/
 runs/
 *.db
 *.zip
+
+# Claude Code / ruflo tooling state (local only)
+.claude-flow/
+.claude/proven-config.json
+.claude/.proven-config-version

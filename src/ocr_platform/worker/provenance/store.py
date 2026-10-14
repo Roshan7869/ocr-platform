@@ -40,20 +40,22 @@ class EvidenceStore:
                     status TEXT DEFAULT 'running'
                 );
                 CREATE TABLE IF NOT EXISTS evidence_log (
-                    doc_id TEXT, run_id TEXT, cell_id TEXT, row_idx INT, field_key TEXT,
-                    value TEXT, conf_visual REAL, p_prior REAL, s_spatial REAL,
+                    doc_id TEXT, page_index INT DEFAULT 0, run_id TEXT, cell_id TEXT,
+                    row_idx INT, field_key TEXT, value TEXT, final_value TEXT,
+                    disposition TEXT DEFAULT 'review', conf_visual REAL, p_prior REAL, s_spatial REAL,
                     c_consistency REAL, score REAL, route TEXT, reason TEXT,
                     low_conf INTEGER, glyph_type TEXT, engine TEXT,
                     is_ditto INTEGER, inherited_from TEXT, norm_flag TEXT,
                     created_at REAL DEFAULT (strftime('%s','now'))
                 );
                 CREATE TABLE IF NOT EXISTS laya_decisions (
-                    doc_id TEXT, run_id TEXT, cell_id TEXT, row_idx INT, field_key TEXT,
+                    doc_id TEXT, page_index INT DEFAULT 0, run_id TEXT, cell_id TEXT,
+                    row_idx INT, field_key TEXT,
                     layer TEXT, decision TEXT, confidence REAL, details TEXT,
                     created_at REAL DEFAULT (strftime('%s','now'))
                 );
                 CREATE TABLE IF NOT EXISTS qa_anomalies (
-                    anomaly_id TEXT PRIMARY KEY, doc_id TEXT, run_id TEXT,
+                    anomaly_id TEXT PRIMARY KEY, doc_id TEXT, page_index INT DEFAULT 0, run_id TEXT,
                     row_idx INT, field_key TEXT, rule TEXT, severity TEXT,
                     current_value TEXT, ctx TEXT, explanation TEXT,
                     created_at REAL DEFAULT (strftime('%s','now'))
@@ -65,9 +67,23 @@ class EvidenceStore:
                     PRIMARY KEY (field_key, glyph_type)
                 );
                 CREATE INDEX IF NOT EXISTS idx_evidence_run ON evidence_log(run_id);
+                CREATE INDEX IF NOT EXISTS idx_evidence_doc_page ON evidence_log(doc_id, page_index);
                 CREATE INDEX IF NOT EXISTS idx_laya_run ON laya_decisions(run_id);
                 CREATE INDEX IF NOT EXISTS idx_qa_run ON qa_anomalies(run_id);
             """)
+            # Existing local runs may have the original prototype schema. SQLite
+            # supports additive migrations, allowing old evidence to remain readable.
+            self._ensure_column(c, "evidence_log", "page_index", "INT DEFAULT 0")
+            self._ensure_column(c, "evidence_log", "final_value", "TEXT")
+            self._ensure_column(c, "evidence_log", "disposition", "TEXT DEFAULT 'review'")
+            self._ensure_column(c, "laya_decisions", "page_index", "INT DEFAULT 0")
+            self._ensure_column(c, "qa_anomalies", "page_index", "INT DEFAULT 0")
+
+    @staticmethod
+    def _ensure_column(connection: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+        columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def start_run(self, run_id: str, doc_count: int = 0) -> None:
         with sqlite3.connect(self.db_path) as c:
@@ -86,11 +102,14 @@ class EvidenceStore:
         arb_conf = max((c.get("conf", 0.0) for c in ocr_res.get("candidates", [])), default=0.0)
         row = {
             "doc_id": cell.get("doc_id", ""),
+            "page_index": cell.get("page_index", 0),
             "run_id": run_id,
             "cell_id": cell.get("cell_id", ""),
             "row_idx": cell.get("row_idx", 0),
             "field_key": cell.get("field_key", ""),
             "value": norm_value,
+            "final_value": laya_decision.get("final_value"),
+            "disposition": laya_decision.get("disposition", "review"),
             "conf_visual": arb_conf,
             "p_prior": laya_decision.get("p_prior", 0.0),
             "s_spatial": laya_decision.get("s_spatial", 1.0),
@@ -114,9 +133,9 @@ class EvidenceStore:
             for layer_name, layer_data in laya_decision.get("laya_layers", {}).items():
                 details = str(layer_data).replace("'", '"')
                 c.execute(
-                    "INSERT INTO laya_decisions (doc_id, run_id, cell_id, row_idx, field_key, layer, decision, confidence, details) VALUES (?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO laya_decisions (doc_id, page_index, run_id, cell_id, row_idx, field_key, layer, decision, confidence, details) VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (
-                        cell.get("doc_id", ""), run_id, cell.get("cell_id", ""),
+                        cell.get("doc_id", ""), cell.get("page_index", 0), run_id, cell.get("cell_id", ""),
                         cell.get("row_idx", 0), cell.get("field_key", ""),
                         layer_name,
                         layer_data.get("decision", ""),
@@ -128,10 +147,14 @@ class EvidenceStore:
     def log_qa_anomaly(self, anomaly: dict, run_id: str) -> None:
         with sqlite3.connect(self.db_path) as c:
             c.execute(
-                "INSERT OR REPLACE INTO qa_anomalies VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                """INSERT OR REPLACE INTO qa_anomalies
+                   (anomaly_id, doc_id, page_index, run_id, row_idx, field_key, rule, severity,
+                    current_value, ctx, explanation, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     anomaly["anomaly_id"],
                     anomaly["doc_id"],
+                    anomaly.get("page_index", 0),
                     run_id,
                     anomaly["row_idx"],
                     anomaly["field_key"],

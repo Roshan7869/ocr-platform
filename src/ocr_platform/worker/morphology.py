@@ -48,7 +48,7 @@ class ContourMorphologyEngine:
             for c in cnts
         )
         is_c1 = "resident_code" in field_key and ink < 0.03 and len(cnts) <= 2
-        glyph = "printed" if len(cnts) > 5 else "handwritten"
+        glyph = "stroke" if is_cb or is_c1 else "printed" if len(cnts) > 5 else "handwritten"
         return GeometryProfile(
             cell_id=cell_id, glyph_type=glyph, ink_density=ink,
             contour_count=len(cnts), is_checkbox=is_cb, is_code1_stroke=is_c1,

@@ -71,6 +71,7 @@ class LayaPipeline:
     def process_cell(self, cell: dict, ocr_result: dict, final_value: str,
                      is_ditto: bool, conf_visual: float, s_spatial: float,
                      c_consistency: float, field_key: str, closed_vocab_fields: set,
+                     p_prior: float = 0.8,
                      bayesian_posterior: float | None = None,
                      bayesian_alpha: float | None = None,
                      prior_n: int = 0) -> CellDecision:
@@ -80,6 +81,7 @@ class LayaPipeline:
             bayesian_posterior: If provided, overrides the fixed-weight composite score.
             bayesian_alpha: Learning rate used by BayesianScorer (for logging).
             prior_n: Number of prior observations for this (field_key, glyph_type).
+            p_prior: Prior confidence for this field/glyph observation.
         """
         self.geometry_gate.eval()
         self.candidate_selector.eval()
@@ -91,7 +93,10 @@ class LayaPipeline:
         with torch.no_grad():
             l1 = self.geometry_gate(
                 ink_density=geo.get("ink_density", 0.0),
-                contour_count=min(geo.get("contour_count", 0) / 20.0, 1.0),
+                # GeometryGate normalizes this feature only in its learned
+                # path; rule inference needs the real contour count to
+                # distinguish printed text from handwriting.
+                contour_count=int(geo.get("contour_count", 0)),
                 is_checkbox=geo.get("is_checkbox", False),
                 is_code1=geo.get("is_code1_stroke", False),
             )

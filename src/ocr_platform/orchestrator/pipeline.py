@@ -78,11 +78,13 @@ class SurveyPipeline:
         bayesian_config: BayesianConfig | None = None,
         dpi: int = 200,
         use_hindi_vlm: bool = True,
+        allow_auto_accept: bool = False,
     ):
         self.template_path = Path(template_path)
         self.db_path = Path(db_path)
         self.output_dir = Path(output_dir)
         self.dpi = dpi
+        self.allow_auto_accept = allow_auto_accept
 
         # Laya pipeline
         self.laya = LayaPipeline(laya_config)
@@ -109,6 +111,8 @@ class SurveyPipeline:
         # Load fixed template
         with open(self.template_path) as f:
             tpl = json.load(f)
+        self.template = tpl
+        self._validate_template_layout(tpl, "root")
         self.tpl_W, self.tpl_H = tpl["page_size"]
         self.row_divs = [int(x) for x in tpl["row_dividers"]]
         self.col_divs_top = [int(x) for x in tpl["column_dividers_top"]]
@@ -117,10 +121,6 @@ class SurveyPipeline:
         self.member_table_cols = tpl.get("member_table_cols", COL_KEYS)
         self.members_start_row = tpl.get("members_start_row", 9)
         self.header_rows = tpl.get("header_rows", 5)
-
-        # Validate template
-        if len(self.row_divs) < 2:
-            raise ValueError(f"Template has {len(self.row_divs)} row dividers; need at least 2")
 
     # ------------------------------------------------------------------
     # OCR initialization
@@ -139,6 +139,9 @@ class SurveyPipeline:
                 self._paddle = PaddleOCR(use_angle_cls=False, lang="multilingual")
             print("  [M03] PaddleOCR hin ready.")
         except Exception as e:
+            # Memoize an unavailable backend so every crop does not retry
+            # model discovery/initialization. The pipeline remains review-only.
+            self._paddle = False
             print(f"  [M03] PaddleOCR hin init failed: {e}")
 
     def _init_paddle_en(self):
@@ -149,6 +152,7 @@ class SurveyPipeline:
             self._paddle_en = PaddleOCR(use_angle_cls=False, lang="en")
             print("  [M03] PaddleOCR en ready.")
         except Exception as e:
+            self._paddle_en = False
             print(f"  [M03] PaddleOCR en init failed: {e}")
 
     def _init_indic(self):
@@ -172,7 +176,7 @@ class SurveyPipeline:
     def _run_paddle(self, crop: np.ndarray, lang: str = "devanagari") -> dict[str, Any] | None:
         self._init_paddle() if lang == "devanagari" else self._init_paddle_en()
         engine = self._paddle if lang == "devanagari" else self._paddle_en
-        if engine is None:
+        if not engine:
             return None
         try:
             # Ensure BGR input for PaddleOCR
@@ -229,8 +233,29 @@ class SurveyPipeline:
             print(f"  [M03] IndicOCR err: {e}")
         return None
 
+    def _resolve_ocr(
+        self, cell_id: str, field_key: str, candidates: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Deduplicate candidates and attach a deterministic resolved observation."""
+        seen: set[str] = set()
+        unique: list[dict[str, Any]] = []
+        for candidate in candidates:
+            key = str(candidate.get("value", "")).strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                unique.append(candidate)
+        best = max(unique, key=lambda candidate: candidate["conf"]) if unique else None
+        return {
+            "cell_id": cell_id,
+            "field_key": field_key,
+            "candidates": unique,
+            "resolved": best["value"] if best else "",
+            "reason": f"best_{best['engine']}" if best else "all_failed",
+        }
+
     def _dispatch_ocr(
-        self, cell_id: str, field_key: str, crop: np.ndarray, handwriting: bool
+        self, cell_id: str, field_key: str, crop: np.ndarray, handwriting: bool,
+        include_vlm: bool = True,
     ) -> dict[str, Any]:
         """Tiered OCR dispatch: Hindi → English (for Latin fields) → VLM → IndicOCR."""
         candidates: list[dict[str, Any]] = []
@@ -247,7 +272,7 @@ class SurveyPipeline:
                 candidates.append(en)
 
         # Tier 3: Hindi VLM for handwriting or low-confidence
-        if handwriting or (candidates and all(c["conf"] < 0.85 for c in candidates)):
+        if include_vlm and (handwriting or not candidates or all(c["conf"] < 0.85 for c in candidates)):
             v = self._run_vlm(crop)
             if v:
                 candidates.append(v)
@@ -258,58 +283,96 @@ class SurveyPipeline:
             if ind:
                 candidates.append(ind)
 
-        # Deduplicate by value
-        seen: set[str] = set()
-        unique: list[dict[str, Any]] = []
-        for c in candidates:
-            k = c["value"].strip().lower()
-            if k and k not in seen:
-                seen.add(k)
-                unique.append(c)
-
-        best = max(unique, key=lambda c: c["conf"]) if unique else None
-        return {
-            "cell_id": cell_id,
-            "field_key": field_key,
-            "candidates": unique,
-            "resolved": best["value"] if best else "",
-            "reason": f"best_{best['engine']}" if best else "all_failed",
-        }
+        return self._resolve_ocr(cell_id, field_key, candidates)
 
     # ------------------------------------------------------------------
     # Template-constrained slicing (no homography warping)
     # ------------------------------------------------------------------
 
+    def _layout_for_page(self, page_index: int) -> dict[str, Any] | None:
+        """Return the explicitly configured layout for a page.
+
+        A legacy template describes page zero only. Applying its grid to a
+        different form page is data corruption, so unconfigured pages are
+        deliberately withheld for review.
+        """
+        layouts = self.template.get("page_layouts")
+        if layouts is None:
+            return self.template if page_index == 0 else None
+        override = layouts.get(str(page_index)) or layouts.get(page_index)
+        if override is None:
+            return None
+        layout = {key: value for key, value in self.template.items() if key != "page_layouts"}
+        layout.update(override)
+        self._validate_template_layout(layout, f"page_layouts[{page_index}]")
+        return layout
+
+    @staticmethod
+    def _validate_template_layout(layout: dict[str, Any], name: str) -> None:
+        """Reject layouts that would create invalid or silently clipped crops."""
+        try:
+            width, height = (int(value) for value in layout["page_size"])
+            row_divs = [int(value) for value in layout["row_dividers"]]
+            top_divs = [int(value) for value in layout["column_dividers_top"]]
+            bottom_divs = [int(value) for value in layout["column_dividers_bottom"]]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Template {name} is missing a valid grid definition") from exc
+
+        grids = {
+            "row_dividers": (row_divs, height),
+            "column_dividers_top": (top_divs, width),
+            "column_dividers_bottom": (bottom_divs, width),
+        }
+        for field, (dividers, dimension) in grids.items():
+            if len(dividers) < 2:
+                raise ValueError(f"Template {name}.{field} needs at least two dividers")
+            if dividers[0] != 0 or any(right <= left for left, right in zip(dividers, dividers[1:])):
+                raise ValueError(f"Template {name}.{field} must start at zero and be strictly increasing")
+            if dividers[-1] > dimension:
+                raise ValueError(
+                    f"Template {name}.{field} ends at {dividers[-1]}, beyond page dimension {dimension}"
+                )
+
     def _slice_cells(
-        self, img_bgr: np.ndarray, doc_id: str
+        self, img_bgr: np.ndarray, doc_id: str, page_index: int
     ) -> list[dict[str, Any]]:
         """Slice rendered page using template dividers.
 
         Dividers are in template pixel space (self.tpl_W × self.tpl_H).
         Scale them to the rendered page size if they don't match.
         """
+        layout = self._layout_for_page(page_index)
+        if layout is None:
+            return []
         h_img, w_img = img_bgr.shape[:2]
-        sx = w_img / self.tpl_W
-        sy = h_img / self.tpl_H
+        template_width, template_height = layout.get("page_size", self.template["page_size"])
+        sx = w_img / template_width
+        sy = h_img / template_height
 
         def scale(val: int) -> int:
             return int(round(val * sx))
 
         rois: list[dict[str, Any]] = []
-        n_rows = len(self.row_divs)
+        row_divs = [int(value) for value in layout["row_dividers"]]
+        col_divs_top = [int(value) for value in layout["column_dividers_top"]]
+        col_divs_bottom = [int(value) for value in layout["column_dividers_bottom"]]
+        header_rows = int(layout.get("header_rows", self.header_rows))
+        header_fields = layout.get("fields", {})
+        member_table_cols = layout.get("member_table_cols", self.member_table_cols)
+        n_rows = len(row_divs)
 
         for ri in range(1, n_rows):
-            y1 = scale(self.row_divs[ri - 1])
-            y2 = scale(self.row_divs[ri])
+            y1 = scale(row_divs[ri - 1])
+            y2 = scale(row_divs[ri])
             if y2 - y1 < 5:
                 continue
 
             # Choose column grid based on whether this is a header or member row
-            if ri <= self.header_rows:
-                col_divs = self.col_divs_top
+            if ri <= header_rows:
+                col_divs = col_divs_top
                 is_header = True
             else:
-                col_divs = self.col_divs_bottom
+                col_divs = col_divs_bottom
                 is_header = False
 
             for ci in range(1, len(col_divs)):
@@ -333,15 +396,17 @@ class SurveyPipeline:
                 # Assign field key
                 if is_header:
                     # Map header cells using template field config
-                    fk = self._map_header_field(ri, ci)
+                    fk = self._map_header_field(ri, ci, header_fields, page_index)
                 else:
-                    fk = self._map_member_field(ci)
+                    fk = self._map_member_field(ci, member_table_cols)
 
                 rois.append({
-                    "cell_id": f"p0_r{ri}_c{ci}_{sha}",
+                    "cell_id": f"p{page_index}_r{ri}_c{ci}_{sha}",
+                    "page_index": page_index,
                     "row_idx": ri,
                     "col_idx": ci,
                     "field_key": fk,
+                    "is_header": is_header,
                     "crop_bgr": crop,
                     "sha256": sha,
                     "box": [cx1, cy1, cx2, cy2],
@@ -350,14 +415,24 @@ class SurveyPipeline:
 
         return rois
 
-    def _map_header_field(self, ri: int, ci: int) -> str:
+    def _map_header_field(
+        self,
+        ri: int,
+        ci: int,
+        fields: dict[str, Any] | None = None,
+        page_index: int = 0,
+    ) -> str:
         """Map header cell position to field key using template config.
 
         Template field keys use 0-indexed column positions (col=0 → first data column).
         ci is 1-indexed interior column index (ci=1 → first data column).
         """
-        for fk, cfg in self.header_fields.items():
-            if cfg.get("page", 1) != 1:
+        for fk, cfg in (fields if fields is not None else self.header_fields).items():
+            configured_page = cfg.get("page")
+            # Existing templates use 1-indexed page numbers; accept a zero-
+            # indexed value too so per-page layouts do not silently lose
+            # their header mappings.
+            if configured_page is not None and configured_page not in (page_index, page_index + 1):
                 continue
             # row_divs[0] is the top edge; template row=1 → ri=1
             if ri == cfg.get("row", 0) + 1:
@@ -368,14 +443,30 @@ class SurveyPipeline:
                     return fk
         return f"hdr_r{ri}_c{ci}"
 
-    def _map_member_field(self, ci: int) -> str:
+    def _map_member_field(self, ci: int, member_table_cols: list[str] | None = None) -> str:
         """Map member table column index to field key."""
         # column_dividers_bottom has N+1 entries for N columns
         # ci starts at 1 (first interior division)
         idx = ci - 1
-        if 0 <= idx < len(self.member_table_cols):
-            return self.member_table_cols[idx]
+        columns = member_table_cols if member_table_cols is not None else self.member_table_cols
+        if 0 <= idx < len(columns):
+            return columns[idx]
         return f"col_{ci}"
+
+    @staticmethod
+    def _collect_cell_output(
+        cell: dict[str, Any],
+        cell_output: dict[str, Any],
+        header_fields: dict[str, dict[str, Any]],
+        members_by_row: dict[int, dict[str, Any]],
+    ) -> None:
+        """Preserve every sliced field, including unreadable/blank cells."""
+        if cell["is_header"]:
+            header_fields[cell["field_key"]] = cell_output
+            return
+        row_idx = cell["row_idx"]
+        members_by_row.setdefault(row_idx, {"row_idx": row_idx, "fields": {}})
+        members_by_row[row_idx]["fields"][cell["field_key"]] = cell_output
 
     # ------------------------------------------------------------------
     # Full pipeline run
@@ -400,18 +491,10 @@ class SurveyPipeline:
         print(f">>> Template: {self.template_path}")
         print("=" * 70)
 
-        # Load Bayesian priors from previous runs
+        # Do not treat previous OCR confidence as supervision. Historical score
+        # learning remains disabled until verified corrections feed calibration.
         if load_priors:
-            previous_rows = self.store.load_previous_runs(exclude_run_id=run_id)
-            if previous_rows:
-                self.bayesian.load_from_db(previous_rows)
-                print(f"  [BAYES] Loaded priors from {len(set(r['run_id'] for r in previous_rows))} previous runs")
-            else:
-                # Try dedicated priors table
-                priors = self.store.load_field_priors()
-                if priors:
-                    self.bayesian.load_from_prior_table(priors)
-                    print(f"  [BAYES] Loaded {len(priors)} field priors")
+            print("  [BAYES] Historical unverified priors disabled; review-first mode")
 
         # M01: Load documents
         pages = self.loader.load(source)
@@ -427,9 +510,17 @@ class SurveyPipeline:
 
         household_outputs: list[dict[str, Any]] = []
         all_qa_anomalies: list[dict[str, Any]] = []
+        page_errors: list[dict[str, Any]] = []
+        _prev_doc_id: str | None = None
 
         for page in pages:
             doc_id = page.doc_id
+
+            # Reset document-scoped state when moving to a new document.
+            if doc_id != _prev_doc_id:
+                self.semantic = SemanticEngine()
+                self.bayesian.reset()
+                _prev_doc_id = doc_id
             print(f"\n--- [{doc_id}] page {page.page_index + 1} ---")
 
             # Decode page image
@@ -439,15 +530,17 @@ class SurveyPipeline:
                 continue
 
             # M02: Template-constrained slice (no homography)
-            rois = self._slice_cells(img, doc_id)
+            rois = self._slice_cells(img, doc_id, page.page_index)
             if not rois:
-                print("  No cells sliced. Check template.")
+                reason = "unsupported_page_layout" if self._layout_for_page(page.page_index) is None else "no_cells_sliced"
+                page_errors.append({"doc_id": doc_id, "page_index": page.page_index, "reason": reason})
+                print(f"  No cells sliced: {reason}.")
                 continue
 
             print(f"  [M02] {len(rois)} cells sliced")
 
             # Save crops
-            crop_dir = self.output_dir / "crops" / doc_id
+            crop_dir = self.output_dir / "crops" / doc_id / f"p{page.page_index + 1:02d}"
             crop_dir.mkdir(parents=True, exist_ok=True)
             for r in rois:
                 p = crop_dir / f"{r['sha256']}.png"
@@ -462,21 +555,49 @@ class SurveyPipeline:
 
             t0 = time.time()
 
+            prepared_cells: list[dict[str, Any]] = []
+            vlm_pending: list[dict[str, Any]] = []
             for cell in rois:
-                crop = cv2.imread(cell["crop_path"])
-                if crop is None:
-                    continue
-
+                crop = cell["crop_bgr"]
                 fk = cell["field_key"]
                 cell_id = cell["cell_id"]
-
-                # ─── M04: Morphology ──────────────────────────────────────
                 geo = self.morphology.analyze(cell_id, crop, fk)
-                glyph_type = geo.glyph_type
+                # Laya L1 consumes the same morphology result used for OCR
+                # routing. Without this, it sees zero-valued placeholder
+                # features and can contradict the actual glyph classification.
+                cell["geometry"] = geo.model_dump()
+                handwriting = geo.glyph_type in ("handwritten", "stroke")
+                # First pass stays fast and local; VLM candidates are batched
+                # below so the GOT model is not reloaded for each cell.
+                ocr_res = self._dispatch_ocr(
+                    cell_id, fk, crop, handwriting=handwriting, include_vlm=False
+                )
+                item = {"cell": cell, "geo": geo, "ocr_res": ocr_res, "handwriting": handwriting}
+                prepared_cells.append(item)
+                if handwriting or not ocr_res["candidates"] or all(
+                    candidate["conf"] < 0.85 for candidate in ocr_res["candidates"]
+                ):
+                    vlm_pending.append(item)
 
-                # ─── M03: OCR dispatch (morphology-aware) ────────────────
-                handwriting = glyph_type in ("handwritten", "stroke")
-                ocr_res = self._dispatch_ocr(cell_id, fk, crop, handwriting=handwriting)
+            if vlm_pending and self._swift_engine is not None and self._swift_engine.available:
+                vlm_results = self._swift_engine.ocr_many(
+                    [item["cell"]["crop_bgr"] for item in vlm_pending]
+                )
+                for item, candidate in zip(vlm_pending, vlm_results):
+                    if candidate:
+                        item["ocr_res"] = self._resolve_ocr(
+                            item["cell"]["cell_id"],
+                            item["cell"]["field_key"],
+                            item["ocr_res"]["candidates"] + [candidate],
+                        )
+
+            for item in prepared_cells:
+                cell = item["cell"]
+                geo = item["geo"]
+                ocr_res = item["ocr_res"]
+                fk = cell["field_key"]
+                cell_id = cell["cell_id"]
+                glyph_type = geo.glyph_type
 
                 if not ocr_res["candidates"]:
                     # Empty cell — store blank
@@ -486,9 +607,30 @@ class SurveyPipeline:
                                        "requires_human": True, "glyph_type": glyph_type,
                                        "p_prior": 0.0, "s_spatial": 1.0,
                                        "c_consistency": 1.0, "reason": "no_candidates",
+                                       "disposition": "review", "final_value": None,
                                        "laya_layers": {}},
                         norm_value="", is_ditto=False, inherited_from="",
                         norm_flag="no_candidates",
+                    )
+                    self._collect_cell_output(
+                        cell,
+                        {
+                            "cell_id": cell_id,
+                            "field_key": fk,
+                            "observed_value": "",
+                            "final_value": None,
+                            "disposition": "review",
+                            "confidence": 0.0,
+                            "composite_score": 0.0,
+                            "route": "low_confidence",
+                            "glyph_type": glyph_type,
+                            "engine": "all_failed",
+                            "norm_flag": "no_candidates",
+                            "is_ditto": False,
+                            "laya": {"L1_glyph_type": glyph_type, "L2_decision": "none", "L3_decision": "none", "L4_route": "low_confidence", "L5": None},
+                        },
+                        header_fields,
+                        members_by_row,
                     )
                     stats["cells"] += 1
                     stats["low_conf"] += 1
@@ -504,10 +646,13 @@ class SurveyPipeline:
 
                 # ─── M07: Arbiter ─────────────────────────────────────────
                 arb = self.arbiter.decide(cell_id, fk, ocr_res)
-                final_val = arb.value if arb.decision != "NULL" else ""
+                observed_value = sem["snapped"] if arb.decision != "NULL" else ""
 
                 # ─── Bayesian evidence scoring (after arbiter conf is known) ──
-                p_prior = 0.8 if fk not in CLOSED_VOCAB_FIELDS else 0.8
+                # No verified calibration has been loaded. Use a neutral
+                # multiplier, rather than an invented 0.8 prior that caps
+                # even a perfect observation below the acceptance threshold.
+                p_prior = 1.0
                 bayes = self.bayesian.score(
                     field_key=fk,
                     glyph_type=glyph_type,
@@ -521,13 +666,14 @@ class SurveyPipeline:
                 laya_cell = self.laya.process_cell(
                     cell=cell,
                     ocr_result=ocr_res,
-                    final_value=final_val,
+                    final_value=observed_value,
                     is_ditto=sem["is_ditto"],
                     conf_visual=arb.conf,
                     s_spatial=1.0,
                     c_consistency=0.85 if sem["is_ditto"] else 1.0,
                     field_key=fk,
                     closed_vocab_fields=CLOSED_VOCAB_FIELDS,
+                    p_prior=p_prior,
                     bayesian_posterior=bayes["posterior"],
                     bayesian_alpha=bayes["alpha"],
                     prior_n=bayes["prior_n"],
@@ -536,6 +682,8 @@ class SurveyPipeline:
                 composite_score = laya_cell.composite_score
                 route = laya_cell.route
                 requires_human = laya_cell.requires_human
+                disposition = "accepted" if self.allow_auto_accept and not requires_human else "review"
+                final_value = observed_value if disposition == "accepted" else None
 
                 # ─── M09: Evidence store ──────────────────────────────────
                 self.store.log_cell(
@@ -553,9 +701,11 @@ class SurveyPipeline:
                                    f"[α={bayes['alpha']:.2f}, "
                                    f"prior={bayes['prior_mean']:.3f}, "
                                    f"n={bayes['prior_n']}]"),
+                        "disposition": disposition,
+                        "final_value": final_value,
                         "laya_layers": {k: v for k, v in laya_cell.laya_layers.items()},
                     },
-                    norm_value=final_val,
+                    norm_value=observed_value,
                     is_ditto=sem["is_ditto"],
                     inherited_from=sem.get("inherited_from", ""),
                     norm_flag=norm_flag,
@@ -571,7 +721,9 @@ class SurveyPipeline:
                 cell_output = {
                     "cell_id": cell_id,
                     "field_key": fk,
-                    "value": final_val,
+                    "observed_value": observed_value,
+                    "final_value": final_value,
+                    "disposition": disposition,
                     "confidence": round(arb.conf, 4),
                     "composite_score": round(composite_score, 4),
                     "route": route,
@@ -589,13 +741,7 @@ class SurveyPipeline:
                 }
 
                 # Header fields go into header dict, member fields go into row dict
-                if fk in self.header_fields:
-                    header_fields[fk] = cell_output
-                else:
-                    ri = cell["row_idx"]
-                    if ri not in members_by_row:
-                        members_by_row[ri] = {"row_idx": ri, "fields": {}}
-                    members_by_row[ri]["fields"][fk] = cell_output
+                self._collect_cell_output(cell, cell_output, header_fields, members_by_row)
 
             # ─── Laya L5 + M08: Household QA ──────────────────────────
             member_rows = sorted(members_by_row.values(), key=lambda m: m["row_idx"])
@@ -604,7 +750,7 @@ class SurveyPipeline:
                 row_dict = {"row_idx": m["row_idx"]}
                 for fk in self.member_table_cols:
                     if fk in m["fields"]:
-                        row_dict[fk] = m["fields"][fk]["value"]
+                        row_dict[fk] = m["fields"][fk]["observed_value"]
                     else:
                         row_dict[fk] = ""
                 # Preserve relation/gender/age for QA
@@ -621,7 +767,7 @@ class SurveyPipeline:
             l5_result = self.laya.process_household(members=member_list, relations=relations)
 
             # M08 RelationalQA
-            qa_anomalies = self.qa.validate(doc_id, run_id, member_list)
+            qa_anomalies = self.qa.validate(doc_id, run_id, member_list, page.page_index)
             for a in qa_anomalies:
                 anomaly_dict = a.to_dict() if hasattr(a, "to_dict") else a.__dict__
                 self.store.log_qa_anomaly(anomaly_dict, run_id)
@@ -648,6 +794,7 @@ class SurveyPipeline:
                 "qa_anomalies": [
                     {
                         "anomaly_id": a.anomaly_id,
+                        "page_index": a.page_index,
                         "rule": a.rule,
                         "severity": a.severity,
                         "explanation": a.explanation,
@@ -663,10 +810,9 @@ class SurveyPipeline:
             print(f"  ✓ {stats['cells']} cells, {stats['auto']} auto, "
                   f"{stats['low_conf']} flagged, {len(qa_anomalies)} QA ({elapsed:.1f}s)")
 
-        # ─── M09: Save Bayesian priors for next run ─────────────────
+        # ─── M09: calibration state ─────────────────────────────────
         prior_snapshot = self.bayesian.get_priors_snapshot()
-        self.store.save_field_priors(prior_snapshot)
-        print(f"\n  [BAYES] Saved {len(prior_snapshot)} field priors for next iteration")
+        print("\n  [BAYES] No unverified observations persisted as priors")
 
         # ─── M10: Export ─────────────────────────────────────────────
         print(f"\n>>> EXPORTING (run: {run_id})")
@@ -676,7 +822,7 @@ class SurveyPipeline:
         json_dir = self.output_dir / "households_json"
         json_dir.mkdir(parents=True, exist_ok=True)
         for hh in household_outputs:
-            jp = json_dir / f"{hh['doc_id']}.json"
+            jp = json_dir / f"{hh['doc_id']}_p{hh['page_index'] + 1:02d}.json"
             jp.write_text(json.dumps(hh, ensure_ascii=False, indent=2), encoding="utf-8")
 
         # Write long CSV
@@ -693,9 +839,14 @@ class SurveyPipeline:
             "output": {
                 "json_dir": str(json_dir),
                 "long_csv": csv_path.get("long_csv") if csv_path else "",
+                "wide_csv": csv_path.get("wide_csv") if csv_path else "",
+                "review_csv": csv_path.get("review_csv") if csv_path else "",
                 "zip": str(zip_path),
             },
             "qa_anomalies": len(all_qa_anomalies),
+            "documents": household_outputs,
+            "members_extracted": sum(len(document["members"]) for document in household_outputs),
+            "page_errors": page_errors,
         }
 
         print(f"\n{'=' * 70}")

@@ -11,7 +11,8 @@ Kaggle setup:
   4. Run all cells
 
 Outputs (in /kaggle/working/output/):
-  - ocr_results.csv          — flat CSV of all extracted fields
+  - ocr_results.csv          — human-approved/auto-accepted values only
+  - ocr_observations.csv     — OCR observations and review status
   - evidence.db              — full SQLite provenance store
   - documents/               — per-PDF JSON outputs
   - run_manifest.json        — run metadata
@@ -44,6 +45,7 @@ TEMPLATE   = CODE_ROOT / "configs" / "ward42_template.json"
 OUT_DIR    = WORK_ROOT / "output"
 DB_PATH    = OUT_DIR / "evidence.db"
 CSV_PATH   = OUT_DIR / "ocr_results.csv"
+OBSERVATIONS_CSV_PATH = OUT_DIR / "ocr_observations.csv"
 DOCS_DIR   = OUT_DIR / "documents"
 MANIFEST   = OUT_DIR / "run_manifest.json"
 
@@ -54,6 +56,21 @@ DPI        = 150  # lower for speed on T4; 200 for quality
 HINDI_VLM  = True  # set False to skip MS-SWIFT inference
 
 os.environ["USE_HINDI_VLM"] = "1" if HINDI_VLM else "0"
+# Attach the FormLens/HindiOCR-VLM LoRA checkpoint as a Kaggle Dataset and set
+# this variable to its local directory. The base GOT model is downloaded once
+# into the Kaggle cache or can also be attached as an input dataset.
+os.environ.setdefault("HINDI_VLM_BASE_MODEL", "stepfun-ai/GOT-OCR2_0")
+os.environ.setdefault("HINDI_VLM_MAX_PIXELS", "401408")  # T4-safe crop resolution
+if HINDI_VLM and os.environ.get("HINDI_VLM_ADAPTER_DIR"):
+    print(f"[VLM] LoRA adapter: {os.environ['HINDI_VLM_ADAPTER_DIR']}")
+if HINDI_VLM:
+    adapter_dir = Path(os.environ.get("HINDI_VLM_ADAPTER_DIR", ""))
+    if not adapter_dir.is_dir():
+        raise RuntimeError(
+            "HINDI_VLM=1 requires a mounted FormLens/Hindi-VLM LoRA adapter. "
+            "Set HINDI_VLM_ADAPTER_DIR to the adapter directory, or set HINDI_VLM=0 "
+            "to run the PaddleOCR-only review pipeline."
+        )
 
 # ============================================================
 # DEPENDENCY INSTALL
@@ -62,19 +79,19 @@ print("[SETUP] Installing dependencies...")
 subprocess.run(
     [sys.executable, "-m", "pip", "install", "-q",
      "pypdfium2", "rapidfuzz", "Pillow", "pandas", "numpy"],
-    check=False
+    check=True
 )
 subprocess.run(
     [sys.executable, "-m", "pip", "install", "-q",
      "paddlepaddle-gpu", "paddleocr",
      "opencv-contrib-python", "transformers", "accelerate"],
-    check=False
+    check=True
 )
 # MS-SWIFT (for Hindi VLM) — may already be cached
 if HINDI_VLM:
     subprocess.run(
         [sys.executable, "-m", "pip", "install", "-q", "ms-swift"],
-        check=False
+        check=True
     )
 
 print("[SETUP] Dependencies installed.\n")
@@ -104,6 +121,41 @@ print()
 # ============================================================
 from ocr_platform.orchestrator.pipeline import SurveyPipeline
 
+FIELDNAMES = [
+    "doc_id", "page_index", "row_idx", "sr_no", "member_name", "relation", "gender", "age",
+    "marital_status", "religion", "caste", "caste_category", "education", "occupation",
+    "monthly_income", "bank_account", "resident_code", "migration_nature", "remarks",
+]
+
+
+def result_rows(result: dict) -> tuple[list[dict], list[dict]]:
+    """Flatten page-aware pipeline results into canonical and review-safe CSV rows."""
+    accepted_rows: list[dict] = []
+    observation_rows: list[dict] = []
+    for document in result.get("documents", []):
+        for member in document.get("members", []):
+            row = {
+                "doc_id": document["doc_id"],
+                "page_index": document["page_index"],
+                "row_idx": member["row_idx"],
+            }
+            observation = dict(row)
+            row_is_accepted = True
+            for field in FIELDNAMES[3:]:
+                field_result = member.get("fields", {}).get(field, {})
+                disposition = field_result.get("disposition", "review")
+                observed = field_result.get("observed_value", "")
+                final_value = field_result.get("final_value", "")
+                row[field] = final_value if disposition == "accepted" and final_value is not None else ""
+                observation[field] = observed
+                observation[f"{field}__disposition"] = disposition
+                observation[f"{field}__confidence"] = field_result.get("confidence", "")
+                row_is_accepted = row_is_accepted and disposition == "accepted"
+            observation_rows.append(observation)
+            if row_is_accepted:
+                accepted_rows.append(row)
+    return accepted_rows, observation_rows
+
 pipeline = SurveyPipeline(
     template_path=str(TEMPLATE),
     db_path=str(DB_PATH),
@@ -113,6 +165,7 @@ pipeline = SurveyPipeline(
 )
 
 results = []
+observations = []
 t0 = time.time()
 errors = []
 
@@ -125,28 +178,9 @@ for i, pdf_path in enumerate(pdfs):
     try:
         result = pipeline.run(pdf_path)
 
-        # Collect results for CSV
-        for member in result.get("members", []):
-            row = {
-                "doc_id": doc_id,
-                "sr_no": member.get("sr_no", ""),
-                "member_name": member.get("member_name", ""),
-                "relation": member.get("relation", ""),
-                "gender": member.get("gender", ""),
-                "age": member.get("age", ""),
-                "marital_status": member.get("marital_status", ""),
-                "religion": member.get("religion", ""),
-                "caste": member.get("caste", ""),
-                "caste_category": member.get("caste_category", ""),
-                "education": member.get("education", ""),
-                "occupation": member.get("occupation", ""),
-                "monthly_income": member.get("monthly_income", ""),
-                "bank_account": member.get("bank_account", ""),
-                "resident_code": member.get("resident_code", ""),
-                "migration_nature": member.get("migration_nature", ""),
-                "remarks": member.get("remarks", ""),
-            }
-            results.append(row)
+        accepted_rows, observed_rows = result_rows(result)
+        results.extend(accepted_rows)
+        observations.extend(observed_rows)
 
         print(f"  ✓ Members: {result.get('members_extracted', 0)} | "
               f"Anomalies: {len(result.get('qa_anomalies', []))}")
@@ -165,17 +199,20 @@ print(f"{'='*60}")
 # ============================================================
 # WRITE CSV
 # ============================================================
-fieldnames = ["doc_id", "sr_no", "member_name", "relation", "gender", "age",
-              "marital_status", "religion", "caste", "caste_category",
-              "education", "occupation", "monthly_income", "bank_account",
-              "resident_code", "migration_nature", "remarks"]
-
 with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
-    writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+    writer = csv.DictWriter(f, fieldnames=FIELDNAMES, extrasaction="ignore")
     writer.writeheader()
     writer.writerows(results)
 
 print(f"\n[CSV] {CSV_PATH} ({len(results)} rows)")
+observation_fieldnames = FIELDNAMES + [
+    f"{field}__{suffix}" for field in FIELDNAMES[3:] for suffix in ("disposition", "confidence")
+]
+with open(OBSERVATIONS_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=observation_fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(observations)
+print(f"[CSV] {OBSERVATIONS_CSV_PATH} ({len(observations)} rows; review-safe observations)")
 
 # ============================================================
 # WRITE MANIFEST
@@ -186,7 +223,8 @@ manifest = {
     "total_pdfs": len(pdfs),
     "successful": len(pdfs) - len(errors),
     "errors": len(errors),
-    "total_members": len(results),
+    "total_members": len(observations),
+    "accepted_members": len(results),
     "elapsed_seconds": round(elapsed, 1),
     "elapsed_minutes": round(elapsed/60, 1),
     "dpi": DPI,

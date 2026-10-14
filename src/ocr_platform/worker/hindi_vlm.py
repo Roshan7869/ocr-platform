@@ -14,8 +14,6 @@ from __future__ import annotations
 import os
 import tempfile
 import json
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -23,30 +21,40 @@ import cv2
 import numpy as np
 
 
-_MODEL_ID = "shaoncvit/HindiOCR-VLM"
-_BASE_MODEL = "-ai/GOT-OCR2_0"
-_ADAPTER_DIR = os.environ.get("HINDI_VLM_ADAPTER_DIR", "")
+_MODEL_ID = os.environ.get("HINDI_VLM_MODEL_ID", "shaoncvit/HindiOCR-VLM")
+# FormLens and HindiOCR-VLM are LoRA adapters trained from GOT-OCR2.0.
+_BASE_MODEL = os.environ.get("HINDI_VLM_BASE_MODEL", "-ai/GOT-OCR2_0")
+_ADAPTER_DIR = os.environ.get(
+    "HINDI_VLM_ADAPTER_DIR",
+    os.environ.get("FORM_LENS_ADAPTER_DIR", ""),
+)
 _USE_SWIFT = os.environ.get("USE_HINDI_VLM", "1") == "1"
+_MAX_PIXELS = os.environ.get("HINDI_VLM_MAX_PIXELS", "401408")
+_BATCH_SIZE = int(os.environ.get("HINDI_VLM_BATCH_SIZE", "8"))
 
 
 class HindiVLMEngine:
     """Thin wrapper around MS-SWIFT inference for HindiOCR-VLM.
 
     Falls back to None if MS-SWIFT is not installed or no adapter is available.
+    Uses in-process swift.infer() call (no subprocess spawn).
     """
 
     def __init__(self):
         self._available = False
         self._adapter_dir = ""
-        self._temp_jsonl: str | None = None
+        self._failure: str | None = None
+        self._swift_infer = None  # cached swift.infer callable
 
         if not _USE_SWIFT:
             return
 
-        # Check if ms-swift is installed
+        # The pip distribution is named ms-swift; its Python module/CLI is swift.
         try:
-            import ms_swift  # noqa: F401
+            import swift  # noqa: F401
+            self._swift_infer = swift.infer
         except ImportError:
+            self._failure = "swift_not_installed"
             return
 
         # Resolve adapter directory
@@ -63,6 +71,7 @@ class HindiVLMEngine:
                         break
 
         if not adapter or not Path(adapter).exists():
+            self._failure = "lora_adapter_not_found"
             return
 
         self._adapter_dir = adapter
@@ -73,85 +82,94 @@ class HindiVLMEngine:
         return self._available
 
     def ocr(self, crop_bgr: np.ndarray) -> dict[str, Any] | None:
-        """Run HindiOCR-VLM on a cell crop.
+        """Run one crop through the batch path for backward compatibility."""
+        return self.ocr_many([crop_bgr])[0]
 
-        Returns dict with value/conf/engine or None on failure.
+    def ocr_many(self, crops_bgr: list[np.ndarray]) -> list[dict[str, Any] | None]:
+        """Run a batch of crops through MS-SWIFT inference.
+
+        Uses in-process swift.infer() (no subprocess). Results preserve input
+        order; missing model results become ``None`` and remain review candidates.
         """
+        empty = [None] * len(crops_bgr)
+        if not crops_bgr:
+            return empty
         if not self._available:
-            return None
+            return empty
+        if self._failure:
+            return empty
+        if self._swift_infer is None:
+            return empty
 
         try:
-            # Write crop to temp file
-            tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-            cv2.imwrite(tmp.name, crop_bgr)
-            tmp.close()
+            with tempfile.TemporaryDirectory(prefix="ocr-platform-swift-") as work_dir:
+                work = Path(work_dir)
+                image_paths = []
+                for index, crop_bgr in enumerate(crops_bgr):
+                    path = work / f"crop_{index:04d}.png"
+                    if not cv2.imwrite(str(path), crop_bgr):
+                        return empty
+                    image_paths.append(str(path))
+                jsonl_path = self._write_input_jsonl(image_paths, work / "input.jsonl")
+                result_path = work / "infer_result.jsonl"
 
-            # Write JSONL input for swift infer
-            jsonl_path = self._write_input_jsonl(tmp.name)
-            out_dir = tempfile.mkdtemp()
+                # Call swift.infer() as a Python function — no subprocess.
+                # Each call still loads the model into VRAM, but we avoid
+                # Python process spawn overhead and get better error handling.
+                try:
+                    result = self._swift_infer(
+                        model=_BASE_MODEL,
+                        adapters=self._adapter_dir,
+                        infer_backend="transformers",
+                        stream=False,
+                        temperature=0,
+                        val_dataset=str(jsonl_path),
+                        max_new_tokens=256,
+                        max_batch_size=_BATCH_SIZE,
+                        result_path=str(result_path),
+                        output_dir=str(work / "output"),
+                    )
+                except Exception as e:
+                    self._failure = f"swift_infer_exception: {e}"
+                    return empty
 
-            cmd = [
-                sys.executable, "-m", "swift", "infer",
-                "--adapters", self._adapter_dir,
-                "--stream", "false",
-                "--temperature", "0",
-                "--val_dataset", jsonl_path,
-                "--max_new_tokens", "256",
-                "--output_dir", out_dir,
-            ]
+                predictions = self._parse_outputs(work, len(crops_bgr))
+                return [
+                    {"value": value, "conf": 0.80, "engine": "hindiocr_vlm"} if value else None
+                    for value in predictions
+                ]
+        except Exception as e:
+            self._failure = f"swift_infer_exception: {e}"
+            return empty
 
-            env = os.environ.copy()
-            env["CUDA_VISIBLE_DEVICES"] = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
-
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=30, env=env
-            )
-            if result.returncode != 0:
-                return None
-
-            # Parse output JSONL
-            pred = self._parse_output(out_dir)
-            if pred:
-                return {
-                    "value": pred,
-                    "conf": 0.80,
-                    "engine": "hindiocr_vlm",
-                }
-        except Exception:
-            pass
-        finally:
-            try:
-                os.unlink(tmp.name)
-            except Exception:
-                pass
-
-        return None
-
-    def _write_input_jsonl(self, image_path: str) -> str:
-        """Write a single-image JSONL for swift infer."""
-        fd, path = tempfile.mkstemp(suffix=".jsonl")
-        with os.fdopen(fd, "w") as f:
-            json.dump({
-                "query": "OCR this handwritten Hindi form field. Output only the text.",
-                "images": [image_path],
-            }, f, ensure_ascii=False)
-            f.write("\n")
+    def _write_input_jsonl(self, image_paths: list[str], path: Path) -> Path:
+        """Write one multimodal JSONL record per crop for batch inference."""
+        with path.open("w", encoding="utf-8") as stream:
+            for image_path in image_paths:
+                json.dump({
+                    "messages": [{
+                        "role": "user",
+                        "content": "<image>OCR this handwritten Hindi form field. Output only the text.",
+                    }],
+                    "images": [image_path],
+                }, stream, ensure_ascii=False)
+                stream.write("\n")
         return path
 
-    def _parse_output(self, out_dir: str) -> str | None:
-        """Find and parse the infer_result JSONL."""
-        out_path = Path(out_dir)
-        for jf in out_path.rglob("infer_result*.jsonl"):
+    def _parse_outputs(self, out_dir: Path, expected: int) -> list[str | None]:
+        """Find ordered MS-SWIFT inference results, padding missing responses."""
+        values: list[str] = []
+        for jf in sorted(out_dir.rglob("infer_result*.jsonl")):
             try:
-                with open(jf) as f:
-                    for line in f:
+                with jf.open(encoding="utf-8") as stream:
+                    for line in stream:
                         data = json.loads(line.strip())
                         resp = data.get("response", "").strip()
                         if resp:
-                            return resp
+                            values.append(resp)
             except Exception:
                 continue
-        return None
+        return (values + [None] * expected)[:expected]
 
     def status(self) -> dict[str, Any]:
         """Return engine status for diagnostics."""
@@ -160,4 +178,7 @@ class HindiVLMEngine:
             "adapter_dir": self._adapter_dir,
             "model_id": _MODEL_ID,
             "base_model": _BASE_MODEL,
+            "batch_size": _BATCH_SIZE,
+            "failure": self._failure,
+            "inference_mode": "in_process" if self._swift_infer else "unavailable",
         }

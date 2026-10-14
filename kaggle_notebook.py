@@ -14,7 +14,6 @@
   transformers \
   accelerate \
   ms-swift \
-  torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 \
   scikit-learn \
   Pillow \
   pandas \
@@ -46,6 +45,9 @@ sys.path.insert(0, str(CODE_DIR / "src"))
 # GPU config
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["USE_HINDI_VLM"] = "1"
+os.environ.setdefault("HINDI_VLM_ADAPTER_DIR", "/kaggle/input/hindi-vlm-lora")
+os.environ.setdefault("HINDI_VLM_BASE_MODEL", "stepfun-ai/GOT-OCR2_0")
+os.environ.setdefault("HINDI_VLM_MAX_PIXELS", "401408")
 
 print(f"PDFs dir: {PDF_DIR}")
 print(f"PDFs found: {len(list(PDF_DIR.glob('*.pdf')))}")

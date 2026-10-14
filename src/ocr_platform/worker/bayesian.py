@@ -104,6 +104,7 @@ class BayesianScorer:
         p_prior: float,
         s_spatial: float,
         c_consistency: float,
+        update_prior: bool = False,
     ) -> dict[str, Any]:
         """Compute Bayesian posterior for a single cell.
 
@@ -130,7 +131,11 @@ class BayesianScorer:
 
         prior_mean_before = prior.mean
         prior_n_before = prior.n
-        prior.update(likelihood)
+        # Unverified OCR confidence is not ground truth. Updating persistent
+        # priors from it would create a self-reinforcing calibration loop.
+        # Callers may opt in only after supplying independently verified labels.
+        if update_prior:
+            prior.update(likelihood)
 
         threshold = 0.88
         return {
@@ -146,3 +151,7 @@ class BayesianScorer:
 
     def get_priors_snapshot(self) -> list[dict]:
         return [p.to_dict() for p in self._priors.values()]
+
+    def reset(self) -> None:
+        """Clear all accumulated priors. Call between independent documents."""
+        self._priors.clear()
