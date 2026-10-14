@@ -323,16 +323,19 @@ class HouseholdQALayer(nn.Module):
         # Head count check
         heads = sum(1 for r in relations if r in ("स्वयं", "मुखिया", "HEAD", "SELF"))
         for i, m in enumerate(members):
-            age = 0
-            try:
-                age = float(m.get("age", 0))
-            except (TypeError, ValueError):
-                pass
+            raw_age = m.get("age", None)
+            age = 0.0
+            age_known = raw_age is not None
+            if age_known:
+                try:
+                    age = float(raw_age)
+                except (TypeError, ValueError):
+                    age_known = False
             rel = m.get("relation", "")
             gender = m.get("gender", "")
             if rel == "पत्नी" and gender == "पुरुष":
                 results.append({"row_idx": i, "decision": "anomaly", "confidence": 0.95, "mode": "rule"})
-            elif rel == "पिता" and age < 18:
+            elif rel == "पिता" and age_known and age < 18:
                 results.append({"row_idx": i, "decision": "anomaly", "confidence": 0.95, "mode": "rule"})
             else:
                 results.append({"row_idx": i, "decision": "ok", "confidence": 0.90, "mode": "rule"})

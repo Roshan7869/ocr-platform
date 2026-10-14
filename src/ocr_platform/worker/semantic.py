@@ -77,6 +77,20 @@ class DittoDAG:
         self.dag: list[dict[str, Any]] = []
 
     def process(self, row_idx: int, field_key: str, raw: str) -> dict[str, Any]:
+        # Explicit empty bypass: blank cells resolve to "" without touching
+        # fuzzy matching or ditto/stroke regexes, so "" can never snap to "1"
+        # or inherit an ancestor value.
+        if not (raw or "").strip():
+            node: dict[str, Any] = {
+                "row_idx": row_idx,
+                "field_key": field_key,
+                "raw": raw,
+                "snapped": "",
+                "is_ditto": False,
+                "inherited_from": None,
+            }
+            self.dag.append(node)
+            return node
         snapped = self._snap(field_key, raw)
         is_ditto = bool(DITTO_RE.match(raw.strip()))
         inherited = None

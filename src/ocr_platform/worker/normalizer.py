@@ -76,6 +76,15 @@ def _normalize_education(raw: str) -> str:
 NO_DITTO_FIELDS = {"education", "age", "member_name", "head_name", "mobile",
                    "survey_date", "monthly_income", "occupation"}
 
+# Integer identifier fields: Devanagari digits translate to ASCII digits that
+# may carry leading zeros ("०५" -> "05"). Strip them ("05" -> "5") so numeric
+# comparisons and QA rules operate on canonical values instead of crashing
+# or mis-sorting on zero-padded strings.
+INTEGER_ID_FIELDS = frozenset({
+    "sr_no", "age", "marriage_age", "resident_code",
+    "ward", "ward_no", "zone", "zone_no", "family_count",
+})
+
 
 class SpatialNormalizer:
     """Normalize raw OCR text with field-aware rules."""
@@ -83,6 +92,7 @@ class SpatialNormalizer:
     def normalize(self, raw: str, field_key: str) -> str:
         t = _nfc(raw).translate(DEV_DIGITS).translate(LOOKALIKE)
         flag = ""
+        was_corrected = False
 
         # Phone: extract 10-digit number, strip from text
         if field_key in {"mobile", "head_mobile"}:
@@ -109,9 +119,23 @@ class SpatialNormalizer:
             t = _normalize_education(t)
             return t, ""
 
+        # Integer identifiers: strip leading zeros ("05" -> "5").
+        # Guarded on non-empty ASCII digits so "" and "-" pass through
+        # untouched instead of raising on int().
+        if field_key in INTEGER_ID_FIELDS and t and t.isdigit():
+            stripped = str(int(t))
+            if stripped != t:
+                t = stripped
+                was_corrected = True
+                flag = "leading_zero_stripped"
+
         # Member name: strip embedded phone numbers
         if field_key == "member_name":
             for num in re.findall(r"\d{10}", t):
                 t = t.replace(num, "").strip()
+                was_corrected = True
 
-        return t.strip(), flag
+        t = t.strip()
+        if was_corrected and not flag:
+            flag = "corrected"
+        return t, flag

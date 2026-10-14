@@ -46,6 +46,7 @@ class EvidenceStore:
                     c_consistency REAL, score REAL, route TEXT, reason TEXT,
                     low_conf INTEGER, glyph_type TEXT, engine TEXT,
                     is_ditto INTEGER, inherited_from TEXT, norm_flag TEXT,
+                    crop_sha256 TEXT DEFAULT '',
                     created_at REAL DEFAULT (strftime('%s','now'))
                 );
                 CREATE TABLE IF NOT EXISTS laya_decisions (
@@ -58,6 +59,7 @@ class EvidenceStore:
                     anomaly_id TEXT PRIMARY KEY, doc_id TEXT, page_index INT DEFAULT 0, run_id TEXT,
                     row_idx INT, field_key TEXT, rule TEXT, severity TEXT,
                     current_value TEXT, ctx TEXT, explanation TEXT,
+                    status TEXT DEFAULT 'pending',
                     created_at REAL DEFAULT (strftime('%s','now'))
                 );
                 CREATE TABLE IF NOT EXISTS field_priors (
@@ -76,8 +78,10 @@ class EvidenceStore:
             self._ensure_column(c, "evidence_log", "page_index", "INT DEFAULT 0")
             self._ensure_column(c, "evidence_log", "final_value", "TEXT")
             self._ensure_column(c, "evidence_log", "disposition", "TEXT DEFAULT 'review'")
+            self._ensure_column(c, "evidence_log", "crop_sha256", "TEXT DEFAULT ''")
             self._ensure_column(c, "laya_decisions", "page_index", "INT DEFAULT 0")
             self._ensure_column(c, "qa_anomalies", "page_index", "INT DEFAULT 0")
+            self._ensure_column(c, "qa_anomalies", "status", "TEXT DEFAULT 'pending'")
 
     @staticmethod
     def _ensure_column(connection: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -123,6 +127,7 @@ class EvidenceStore:
             "is_ditto": 1 if is_ditto else 0,
             "inherited_from": inherited_from,
             "norm_flag": norm_flag,
+            "crop_sha256": cell.get("sha256", ""),
         }
         cols = list(row.keys())
         placeholders = ",".join("?" * len(cols))
@@ -145,12 +150,26 @@ class EvidenceStore:
                 )
 
     def log_qa_anomaly(self, anomaly: dict, run_id: str) -> None:
+        """Persist a QA anomaly without clobbering human review state.
+
+        Rows already marked 'human_verified' survive pipeline re-runs;
+        any other reviewer-set status is carried forward instead of being
+        reset to 'pending'.
+        """
         with sqlite3.connect(self.db_path) as c:
+            c.execute("PRAGMA busy_timeout=60000")
+            existing = c.execute(
+                "SELECT status FROM qa_anomalies WHERE anomaly_id=?",
+                (anomaly["anomaly_id"],),
+            ).fetchone()
+            if existing and existing[0] == "human_verified":
+                return
+            status = existing[0] if existing and existing[0] else "pending"
             c.execute(
                 """INSERT OR REPLACE INTO qa_anomalies
                    (anomaly_id, doc_id, page_index, run_id, row_idx, field_key, rule, severity,
-                    current_value, ctx, explanation, created_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    current_value, ctx, explanation, status, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     anomaly["anomaly_id"],
                     anomaly["doc_id"],
@@ -163,6 +182,7 @@ class EvidenceStore:
                     anomaly["value"],
                     anomaly["ctx"],
                     anomaly["explanation"],
+                    status,
                     time.time(),
                 ),
             )

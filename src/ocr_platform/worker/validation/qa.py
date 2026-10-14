@@ -32,6 +32,27 @@ MALE_RELATIONS = {"स्वयं", "पति", "पुत्र", "पित�
 FEMALE_RELATIONS = {"पत्नी", "पुत्री", "माता", "बहन", "बहू", "पोती", "सास"}
 
 
+def parse_int_or_none(val: Any) -> int | None:
+    """Parse an age-like value to int, or None when unknown.
+
+    Dashes, blanks, and unreadable OCR strings return None instead of a
+    synthetic 0/30, so QA rules skip unknown ages rather than flagging
+    them. Out-of-range values (>125) are also treated as unknown.
+    """
+    if val is None:
+        return None
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, (int, float)):
+        parsed = int(val)
+        return parsed if 0 <= parsed <= 125 else None
+    text = str(val).strip()
+    if not text or not text.isdigit():
+        return None
+    parsed = int(text)
+    return parsed if 0 <= parsed <= 125 else None
+
+
 class RelationalQA:
     """Validate household business rules after all members are extracted."""
 
@@ -72,17 +93,14 @@ class RelationalQA:
                 explanation=f"Expected 1 head, found {len(heads)}",
             ))
 
-        # Find head row and head age
+        # Find head row and head age (full-roster scan; head may be any row)
         head_idx = None
-        head_age = 0
+        head_age: int | None = None
         for i, m in enumerate(members):
             rel = m.get("relation", "").strip()
             if rel in ("स्वयं", "मुखिया", "HEAD", "SELF"):
                 head_idx = i
-                try:
-                    head_age = int(m.get("age", 0))
-                except (TypeError, ValueError):
-                    head_age = 0
+                head_age = parse_int_or_none(m.get("age"))
                 break
 
         # Rule 2: no spouse without a head
@@ -94,11 +112,10 @@ class RelationalQA:
                 explanation="Spouse exists but head not found",
             ))
 
-        # Rule 3: father must be ≥ 18
+        # Rule 3: father must be ≥ 18 (skipped when age is unknown)
         for i, m in enumerate(members):
-            try:
-                age = int(m.get("age", 0))
-            except (TypeError, ValueError):
+            age = parse_int_or_none(m.get("age"))
+            if age is None:
                 continue
             if m.get("relation", "").strip() == "पिता" and age < 18:
                 anoms.append(QAAnomaly(

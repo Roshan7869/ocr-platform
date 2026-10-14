@@ -38,7 +38,7 @@ from ocr_platform.worker.morphology import ContourMorphologyEngine
 from ocr_platform.worker.normalizer import NO_DITTO_FIELDS, SpatialNormalizer
 from ocr_platform.worker.provenance.store import EvidenceStore
 from ocr_platform.worker.semantic import SemanticEngine
-from ocr_platform.worker.validation.qa import RelationalQA
+from ocr_platform.worker.validation.qa import RelationalQA, parse_int_or_none
 
 
 # 18 member-table columns (fixed by template)
@@ -753,13 +753,12 @@ class SurveyPipeline:
                         row_dict[fk] = m["fields"][fk]["observed_value"]
                     else:
                         row_dict[fk] = ""
-                # Preserve relation/gender/age for QA
+                # Preserve relation/gender/age for QA.
+                # Unreadable ages stay None — never a synthetic 0 — so QA
+                # rules skip unknown ages instead of flagging them.
                 row_dict["relation"] = row_dict.get("relation", "")
                 row_dict["gender"] = row_dict.get("gender", "")
-                try:
-                    row_dict["age"] = int(row_dict.get("age", 0) or 0)
-                except (TypeError, ValueError):
-                    row_dict["age"] = 0
+                row_dict["age"] = parse_int_or_none(row_dict.get("age"))
                 member_list.append(row_dict)
 
             # L5 HouseholdQA
