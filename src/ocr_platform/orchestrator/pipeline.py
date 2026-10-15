@@ -21,43 +21,76 @@ import json
 import os
 import time
 import uuid
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
 
-from ocr_platform.document.loader import DocumentLoader, Page
+from ocr_platform.document.loader import DocumentLoader
 from ocr_platform.export.writer import ExportEngine
 from ocr_platform.laya.config import LayaConfig
-from ocr_platform.laya.pipeline import CellDecision, LayaPipeline
+from ocr_platform.laya.pipeline import LayaPipeline
+from ocr_platform.observability import (
+    emit_field_decision,
+    emit_run_complete,
+    emit_run_errored,
+    emit_run_start,
+)
 from ocr_platform.worker.arbiter import Arbiter
-from ocr_platform.worker.bayesian import BayesianScorer, BayesianConfig
+from ocr_platform.worker.bayesian import BayesianConfig, BayesianScorer
 from ocr_platform.worker.hindi_vlm import HindiVLMEngine
 from ocr_platform.worker.morphology import ContourMorphologyEngine
-from ocr_platform.worker.normalizer import NO_DITTO_FIELDS, SpatialNormalizer
+from ocr_platform.worker.normalizer import SpatialNormalizer
 from ocr_platform.worker.provenance.store import EvidenceStore
 from ocr_platform.worker.semantic import SemanticEngine
 from ocr_platform.worker.validation.qa import RelationalQA, parse_int_or_none
 
-
 # 18 member-table columns (fixed by template)
 COL_KEYS = [
-    "sr_no", "member_name", "relation", "gender", "age", "marital_status",
-    "marriage_age", "religion", "caste", "caste_category", "education",
-    "occupation", "employment_nature", "monthly_income", "bank_account",
-    "resident_code", "migration_nature", "remarks",
+    "sr_no",
+    "member_name",
+    "relation",
+    "gender",
+    "age",
+    "marital_status",
+    "marriage_age",
+    "religion",
+    "caste",
+    "caste_category",
+    "education",
+    "occupation",
+    "employment_nature",
+    "monthly_income",
+    "bank_account",
+    "resident_code",
+    "migration_nature",
+    "remarks",
 ]
 
 CLOSED_VOCAB_FIELDS = {
-    "gender", "relation", "religion", "marital_status", "caste_category",
-    "resident_code", "marriage_age", "bank_account",
+    "gender",
+    "relation",
+    "religion",
+    "marital_status",
+    "caste_category",
+    "resident_code",
+    "marriage_age",
+    "bank_account",
 }
 
 EN_FIELDS = {
-    "enumerator_name", "enumerator_mobile", "head_name", "head_mobile",
-    "member_name", "monthly_income", "education", "survey_date",
-    "occupation", "employment_nature",
+    "enumerator_name",
+    "enumerator_mobile",
+    "head_name",
+    "head_mobile",
+    "member_name",
+    "monthly_income",
+    "education",
+    "survey_date",
+    "occupation",
+    "employment_nature",
 }
 
 
@@ -131,14 +164,20 @@ class SurveyPipeline:
             return
         try:
             from paddleocr import PaddleOCR
+
             os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
-            # PaddleOCR 3.x: 'hi' for Hindi; falls back to multilingual
+            # PaddleOCR 3.x: 'hi' for Hindi; falls back to multilingual.
+            # enable_mkldnn=False: the default oneDNN path raises
+            # NotImplementedError on CPU/paddlepaddle 3.3.1 (spike caveat);
+            # this is the supported knob, same PP-OCRv6 models.
             try:
-                self._paddle = PaddleOCR(use_angle_cls=False, lang="hi")
-            except Exception:
-                self._paddle = PaddleOCR(use_angle_cls=False, lang="multilingual")
+                self._paddle = PaddleOCR(use_angle_cls=False, lang="hi", enable_mkldnn=False)
+            except Exception:  # noqa: BLE001 - PaddleOCR lang init raises varied errors; fallback to multilingual
+                self._paddle = PaddleOCR(
+                    use_angle_cls=False, lang="multilingual", enable_mkldnn=False
+                )
             print("  [M03] PaddleOCR hin ready.")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - optional OCR backend may fail init arbitrarily; pipeline degrades to review-only
             # Memoize an unavailable backend so every crop does not retry
             # model discovery/initialization. The pipeline remains review-only.
             self._paddle = False
@@ -149,9 +188,10 @@ class SurveyPipeline:
             return
         try:
             from paddleocr import PaddleOCR
-            self._paddle_en = PaddleOCR(use_angle_cls=False, lang="en")
+
+            self._paddle_en = PaddleOCR(use_angle_cls=False, lang="en", enable_mkldnn=False)
             print("  [M03] PaddleOCR en ready.")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - optional OCR backend may fail init arbitrarily; pipeline degrades to review-only
             self._paddle_en = False
             print(f"  [M03] PaddleOCR en init failed: {e}")
 
@@ -159,13 +199,16 @@ class SurveyPipeline:
         if self._indic is not None:
             return
         try:
-            from transformers import AutoProcessor, AutoModelForVision2Seq
+            from transformers import AutoModelForVision2Seq, AutoProcessor
+
             print("  [M03] Loading IndicOCR...")
             p = AutoProcessor.from_pretrained("bodhan-ai/indic-ocr", trust_remote_code=True)
-            m = AutoModelForVision2Seq.from_pretrained("bodhan-ai/indic-ocr", trust_remote_code=True)
+            m = AutoModelForVision2Seq.from_pretrained(
+                "bodhan-ai/indic-ocr", trust_remote_code=True
+            )
             self._indic = (p, m)
             print("  [M03] IndicOCR ready.")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - optional HF backend may fail load arbitrarily; pipeline degrades to review-only
             self._indic = False
             print(f"  [M03] IndicOCR unavailable: {e}")
 
@@ -182,17 +225,37 @@ class SurveyPipeline:
             # Ensure BGR input for PaddleOCR
             if len(crop.shape) == 3 and crop.shape[2] == 3:
                 pass  # already BGR from cv2.imdecode
-            padded = cv2.copyMakeBorder(crop, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=(255, 255, 255))
-            results = engine.ocr(padded, cls=False, rec=True, det=False)
+            padded = cv2.copyMakeBorder(
+                crop, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=(255, 255, 255)
+            )
+            # PaddleOCR 3.x: predict() takes the image only (no det/rec/cls
+            # kwargs); returns per-image page dicts with rec_texts/rec_scores.
+            results = engine.predict(padded)
             best_txt, best_conf = "", 0.0
             if results:
                 for page_result in results:
+                    if isinstance(page_result, dict):
+                        texts = page_result.get("rec_texts") or []
+                        scores = page_result.get("rec_scores") or []
+                        for raw_txt, raw_conf in zip(texts, scores):
+                            try:
+                                txt = str(raw_txt or "").strip()
+                                conf = float(raw_conf)
+                            except (TypeError, ValueError):
+                                continue
+                            if txt and conf > best_conf:
+                                best_txt, best_conf = txt, conf
+                        continue
                     if not page_result:
                         continue
                     for item in page_result:
                         try:
                             if isinstance(item, (list, tuple)) and len(item) >= 2:
-                                txt = (item[0] or "").strip() if isinstance(item[0], str) else str(item[0]).strip()
+                                txt = (
+                                    (item[0] or "").strip()
+                                    if isinstance(item[0], str)
+                                    else str(item[0]).strip()
+                                )
                                 conf = float(item[1]) if not isinstance(item[1], str) else 0.0
                             else:
                                 continue
@@ -202,7 +265,7 @@ class SurveyPipeline:
                             continue
             if best_txt and best_conf > 0.0:
                 return {"value": best_txt, "conf": best_conf, "engine": f"paddle_{lang[:2]}"}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - per-crop OCR may raise varied cv2/engine errors; crop degrades to no-candidate
             print(f"  [M03] PaddleOCR err: {e}")
         return None
 
@@ -222,14 +285,17 @@ class SurveyPipeline:
         proc, model = self._indic
         try:
             from PIL import Image
-            padded = cv2.copyMakeBorder(crop, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+
+            padded = cv2.copyMakeBorder(
+                crop, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=(255, 255, 255)
+            )
             rgb = cv2.cvtColor(padded, cv2.COLOR_BGR2RGB)
             inp = proc(Image.fromarray(rgb), return_tensors="pt")
             ids = model.generate(**inp, max_new_tokens=256)
             txt = proc.batch_decode(ids, skip_special_tokens=True)[0].strip()
             if txt:
                 return {"value": txt, "conf": 0.75, "engine": "indic"}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - per-crop VLM inference may raise varied errors; crop degrades to no-candidate
             print(f"  [M03] IndicOCR err: {e}")
         return None
 
@@ -254,7 +320,11 @@ class SurveyPipeline:
         }
 
     def _dispatch_ocr(
-        self, cell_id: str, field_key: str, crop: np.ndarray, handwriting: bool,
+        self,
+        cell_id: str,
+        field_key: str,
+        crop: np.ndarray,
+        handwriting: bool,
         include_vlm: bool = True,
     ) -> dict[str, Any]:
         """Tiered OCR dispatch: Hindi → English (for Latin fields) → VLM → IndicOCR."""
@@ -272,7 +342,9 @@ class SurveyPipeline:
                 candidates.append(en)
 
         # Tier 3: Hindi VLM for handwriting or low-confidence
-        if include_vlm and (handwriting or not candidates or all(c["conf"] < 0.85 for c in candidates)):
+        if include_vlm and (
+            handwriting or not candidates or all(c["conf"] < 0.85 for c in candidates)
+        ):
             v = self._run_vlm(crop)
             if v:
                 candidates.append(v)
@@ -326,8 +398,10 @@ class SurveyPipeline:
         for field, (dividers, dimension) in grids.items():
             if len(dividers) < 2:
                 raise ValueError(f"Template {name}.{field} needs at least two dividers")
-            if dividers[0] != 0 or any(right <= left for left, right in zip(dividers, dividers[1:])):
-                raise ValueError(f"Template {name}.{field} must start at zero and be strictly increasing")
+            if dividers[0] != 0 or any(right <= left for left, right in pairwise(dividers)):
+                raise ValueError(
+                    f"Template {name}.{field} must start at zero and be strictly increasing"
+                )
             if dividers[-1] > dimension:
                 raise ValueError(
                     f"Template {name}.{field} ends at {dividers[-1]}, beyond page dimension {dimension}"
@@ -347,10 +421,10 @@ class SurveyPipeline:
         h_img, w_img = img_bgr.shape[:2]
         template_width, template_height = layout.get("page_size", self.template["page_size"])
         sx = w_img / template_width
-        sy = h_img / template_height
+        _sy = h_img / template_height
 
         def scale(val: int) -> int:
-            return int(round(val * sx))
+            return round(val * sx)
 
         rois: list[dict[str, Any]] = []
         row_divs = [int(value) for value in layout["row_dividers"]]
@@ -400,18 +474,20 @@ class SurveyPipeline:
                 else:
                     fk = self._map_member_field(ci, member_table_cols)
 
-                rois.append({
-                    "cell_id": f"p{page_index}_r{ri}_c{ci}_{sha}",
-                    "page_index": page_index,
-                    "row_idx": ri,
-                    "col_idx": ci,
-                    "field_key": fk,
-                    "is_header": is_header,
-                    "crop_bgr": crop,
-                    "sha256": sha,
-                    "box": [cx1, cy1, cx2, cy2],
-                    "doc_id": doc_id,
-                })
+                rois.append(
+                    {
+                        "cell_id": f"p{page_index}_r{ri}_c{ci}_{sha}",
+                        "page_index": page_index,
+                        "row_idx": ri,
+                        "col_idx": ci,
+                        "field_key": fk,
+                        "is_header": is_header,
+                        "crop_bgr": crop,
+                        "sha256": sha,
+                        "box": [cx1, cy1, cx2, cy2],
+                        "doc_id": doc_id,
+                    }
+                )
 
         return rois
 
@@ -484,6 +560,8 @@ class SurveyPipeline:
         """
         run_id = f"run_{uuid.uuid4().hex[:8]}"
         source = Path(source)
+        run_wall_start = time.time()
+        emit_run_start(run_id=run_id)
 
         print("=" * 70)
         print(f">>> SURVEY OCR PIPELINE — {run_id}")
@@ -500,12 +578,17 @@ class SurveyPipeline:
         pages = self.loader.load(source)
         if not pages:
             print("No pages loaded. Check input.")
+            emit_run_errored(run_id=run_id, reason_code="EMPTY_DOCUMENT")
             return {"run_id": run_id, "error": "no_pages"}
 
         self.store.start_run(run_id, doc_count=len(pages))
         stats: dict[str, int] = {
-            "docs": 0, "pages": 0, "cells": 0,
-            "auto": 0, "low_conf": 0, "qa_flags": 0,
+            "docs": 0,
+            "pages": 0,
+            "cells": 0,
+            "auto": 0,
+            "low_conf": 0,
+            "qa_flags": 0,
         }
 
         household_outputs: list[dict[str, Any]] = []
@@ -532,8 +615,14 @@ class SurveyPipeline:
             # M02: Template-constrained slice (no homography)
             rois = self._slice_cells(img, doc_id, page.page_index)
             if not rois:
-                reason = "unsupported_page_layout" if self._layout_for_page(page.page_index) is None else "no_cells_sliced"
-                page_errors.append({"doc_id": doc_id, "page_index": page.page_index, "reason": reason})
+                reason = (
+                    "unsupported_page_layout"
+                    if self._layout_for_page(page.page_index) is None
+                    else "no_cells_sliced"
+                )
+                page_errors.append(
+                    {"doc_id": doc_id, "page_index": page.page_index, "reason": reason}
+                )
                 print(f"  No cells sliced: {reason}.")
                 continue
 
@@ -574,8 +663,10 @@ class SurveyPipeline:
                 )
                 item = {"cell": cell, "geo": geo, "ocr_res": ocr_res, "handwriting": handwriting}
                 prepared_cells.append(item)
-                if handwriting or not ocr_res["candidates"] or all(
-                    candidate["conf"] < 0.85 for candidate in ocr_res["candidates"]
+                if (
+                    handwriting
+                    or not ocr_res["candidates"]
+                    or all(candidate["conf"] < 0.85 for candidate in ocr_res["candidates"])
                 ):
                     vlm_pending.append(item)
 
@@ -602,14 +693,25 @@ class SurveyPipeline:
                 if not ocr_res["candidates"]:
                     # Empty cell — store blank
                     self.store.log_cell(
-                        run_id=run_id, cell=cell, ocr_res={"candidates": [], "resolved": ""},
-                        laya_decision={"composite_score": 0.0, "route": "low_confidence",
-                                       "requires_human": True, "glyph_type": glyph_type,
-                                       "p_prior": 0.0, "s_spatial": 1.0,
-                                       "c_consistency": 1.0, "reason": "no_candidates",
-                                       "disposition": "review", "final_value": None,
-                                       "laya_layers": {}},
-                        norm_value="", is_ditto=False, inherited_from="",
+                        run_id=run_id,
+                        cell=cell,
+                        ocr_res={"candidates": [], "resolved": ""},
+                        laya_decision={
+                            "composite_score": 0.0,
+                            "route": "low_confidence",
+                            "requires_human": True,
+                            "glyph_type": glyph_type,
+                            "p_prior": 0.0,
+                            "s_spatial": 1.0,
+                            "c_consistency": 1.0,
+                            "reason": "no_candidates",
+                            "disposition": "review",
+                            "final_value": None,
+                            "laya_layers": {},
+                        },
+                        norm_value="",
+                        is_ditto=False,
+                        inherited_from="",
                         norm_flag="no_candidates",
                     )
                     self._collect_cell_output(
@@ -627,7 +729,13 @@ class SurveyPipeline:
                             "engine": "all_failed",
                             "norm_flag": "no_candidates",
                             "is_ditto": False,
-                            "laya": {"L1_glyph_type": glyph_type, "L2_decision": "none", "L3_decision": "none", "L4_route": "low_confidence", "L5": None},
+                            "laya": {
+                                "L1_glyph_type": glyph_type,
+                                "L2_decision": "none",
+                                "L3_decision": "none",
+                                "L4_route": "low_confidence",
+                                "L5": None,
+                            },
                         },
                         header_fields,
                         members_by_row,
@@ -682,12 +790,23 @@ class SurveyPipeline:
                 composite_score = laya_cell.composite_score
                 route = laya_cell.route
                 requires_human = laya_cell.requires_human
-                disposition = "accepted" if self.allow_auto_accept and not requires_human else "review"
+                disposition = (
+                    "accepted" if self.allow_auto_accept and not requires_human else "review"
+                )
                 final_value = observed_value if disposition == "accepted" else None
+                emit_field_decision(
+                    run_id=run_id,
+                    field_id=cell_id,
+                    disposition=disposition,
+                    primary_reason=route,
+                    accepted_by="policy" if disposition == "accepted" else "none",
+                )
 
                 # ─── M09: Evidence store ──────────────────────────────────
                 self.store.log_cell(
-                    run_id=run_id, cell=cell, ocr_res=ocr_res,
+                    run_id=run_id,
+                    cell=cell,
+                    ocr_res=ocr_res,
                     laya_decision={
                         "composite_score": composite_score,
                         "route": route,
@@ -696,11 +815,13 @@ class SurveyPipeline:
                         "p_prior": p_prior,
                         "s_spatial": 1.0,
                         "c_consistency": 0.85 if sem["is_ditto"] else 1.0,
-                        "reason": (f"S={composite_score:.3f} "
-                                   f"{'≥' if composite_score >= 0.88 else '<'} 0.88 "
-                                   f"[α={bayes['alpha']:.2f}, "
-                                   f"prior={bayes['prior_mean']:.3f}, "
-                                   f"n={bayes['prior_n']}]"),
+                        "reason": (
+                            f"S={composite_score:.3f} "
+                            f"{'≥' if composite_score >= 0.88 else '<'} 0.88 "
+                            f"[α={bayes['alpha']:.2f}, "
+                            f"prior={bayes['prior_mean']:.3f}, "
+                            f"n={bayes['prior_n']}]"
+                        ),
                         "disposition": disposition,
                         "final_value": final_value,
                         "laya_layers": {k: v for k, v in laya_cell.laya_layers.items()},
@@ -806,8 +927,10 @@ class SurveyPipeline:
 
             elapsed = time.time() - t0
             stats["docs"] += 1
-            print(f"  ✓ {stats['cells']} cells, {stats['auto']} auto, "
-                  f"{stats['low_conf']} flagged, {len(qa_anomalies)} QA ({elapsed:.1f}s)")
+            print(
+                f"  ✓ {stats['cells']} cells, {stats['auto']} auto, "
+                f"{stats['low_conf']} flagged, {len(qa_anomalies)} QA ({elapsed:.1f}s)"
+            )
 
         # ─── M09: calibration state ─────────────────────────────────
         prior_snapshot = self.bayesian.get_priors_snapshot()
@@ -827,6 +950,14 @@ class SurveyPipeline:
         # Write long CSV
         csv_path = self.export.export(run_id, COL_KEYS)
         zip_path = self.export.make_zip(run_id)
+
+        emit_run_complete(
+            run_id=run_id,
+            accepted=stats["auto"],
+            review=stats["low_conf"],
+            errored=len(page_errors),
+            wall_ms=int((time.time() - run_wall_start) * 1000),
+        )
 
         result = {
             "run_id": run_id,

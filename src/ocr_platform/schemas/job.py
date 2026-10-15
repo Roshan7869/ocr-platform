@@ -32,11 +32,13 @@ class PageClass(str, Enum):
     page_set_mismatch = "page_set_mismatch"
 
 
-TERMINAL_PAGE_CLASSES = frozenset({
-    PageClass.encrypted,
-    PageClass.corrupt,
-    PageClass.empty,
-})
+TERMINAL_PAGE_CLASSES = frozenset(
+    {
+        PageClass.encrypted,
+        PageClass.corrupt,
+        PageClass.empty,
+    }
+)
 
 
 class DocumentDisposition(str, Enum):
@@ -79,7 +81,7 @@ class ConfigurationFingerprint(BaseModel):
     engine_versions: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _validate(self) -> "ConfigurationFingerprint":
+    def _validate(self) -> ConfigurationFingerprint:
         for field_name in ("template_manifest_hash", "runtime_config_hash"):
             value = getattr(self, field_name)
             if not is_content_hash(value):
@@ -112,7 +114,7 @@ class RenderMetadata(BaseModel):
     height_px: int
 
     @model_validator(mode="after")
-    def _validate(self) -> "RenderMetadata":
+    def _validate(self) -> RenderMetadata:
         if self.dpi <= 0 or self.scale <= 0:
             raise ValueError("dpi and scale must be positive")
         if self.width_px <= 0 or self.height_px <= 0:
@@ -134,7 +136,7 @@ class PageArtifact(BaseModel):
     height_px: int
 
     @model_validator(mode="after")
-    def _validate(self) -> "PageArtifact":
+    def _validate(self) -> PageArtifact:
         if self.page_index < 0:
             raise ValueError("page_index must be non-negative")
         if not is_content_hash(self.content_hash):
@@ -161,7 +163,7 @@ class RunAttempt(BaseModel):
     outcome: str = "running"
 
     @model_validator(mode="after")
-    def _validate(self) -> "RunAttempt":
+    def _validate(self) -> RunAttempt:
         if self.attempt_index < 0:
             raise ValueError("attempt_index must be non-negative")
         if self.finished_at is not None and self.finished_at < self.started_at:
@@ -197,17 +199,19 @@ class DocumentRun(BaseModel):
         template_version: str,
         pages: tuple[PageArtifact, ...] = (),
         created_at: float = 0.0,
-    ) -> "DocumentRun":
+    ) -> DocumentRun:
         """Build a run, deriving identity and any terminal document error.
 
         Identity is a pure function of the uploaded bytes plus the
         configuration fingerprint, so it is reproducible across processes.
         """
         digest = document_content_hash(pdf_bytes)
-        run_id = content_hash({
-            "document_content_hash": digest,
-            "configuration_fingerprint": fingerprint.fingerprint(),
-        })
+        run_id = content_hash(
+            {
+                "document_content_hash": digest,
+                "configuration_fingerprint": fingerprint.fingerprint(),
+            }
+        )
         error_code: DocumentErrorCode | None = None
         terminal = [p for p in pages if p.page_class in TERMINAL_PAGE_CLASSES]
         if terminal:
@@ -229,7 +233,7 @@ class DocumentRun(BaseModel):
         )
 
     @model_validator(mode="after")
-    def _validate(self) -> "DocumentRun":
+    def _validate(self) -> DocumentRun:
         if self.disposition is DocumentDisposition.errored and self.document_error_code is None:
             raise ValueError("errored document requires a document_error_code")
         if self.disposition is DocumentDisposition.ok and self.document_error_code is not None:
@@ -245,7 +249,7 @@ class DocumentRun(BaseModel):
     def is_errored(self) -> bool:
         return self.disposition is DocumentDisposition.errored
 
-    def with_attempt(self, attempt: RunAttempt) -> "DocumentRun":
+    def with_attempt(self, attempt: RunAttempt) -> DocumentRun:
         """Return a new run with *attempt* appended (runs are immutable)."""
         return self.model_copy(update={"attempts": (*self.attempts, attempt)})
 

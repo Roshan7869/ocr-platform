@@ -1,4 +1,4 @@
-# tests/test_document_loader.py
+# tests/unit/test_document_loader.py
 
 ## Role
 Tests image, directory, ZIP, hash, and input-validation behavior.

@@ -18,8 +18,9 @@ between them live in ``worker/render/coordinates.py``.
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable
 from enum import Enum
-from typing import Any, Iterable, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -30,12 +31,14 @@ PAGE_SPACE_SYSTEM = "image_top_left_normalized"
 PDF_BOTTOM_LEFT_NATIVE = "pdf_bottom_left_native"
 CROP_LOCAL_TOP_LEFT = "crop_local_top_left"
 
-COORDINATE_SYSTEMS = frozenset({
-    IMAGE_TOP_LEFT_PIXEL,
-    PAGE_SPACE_SYSTEM,
-    PDF_BOTTOM_LEFT_NATIVE,
-    CROP_LOCAL_TOP_LEFT,
-})
+COORDINATE_SYSTEMS = frozenset(
+    {
+        IMAGE_TOP_LEFT_PIXEL,
+        PAGE_SPACE_SYSTEM,
+        PDF_BOTTOM_LEFT_NATIVE,
+        CROP_LOCAL_TOP_LEFT,
+    }
+)
 CROP_LOCAL_SYSTEMS = frozenset({CROP_LOCAL_TOP_LEFT})
 
 
@@ -56,16 +59,14 @@ class BBox(BaseModel):
     coordinate_system: str
 
     @model_validator(mode="after")
-    def _validate(self) -> "BBox":
+    def _validate(self) -> BBox:
         if self.coordinate_system not in COORDINATE_SYSTEMS:
             raise ValueError(
                 f"unknown coordinate_system {self.coordinate_system!r}; "
                 f"expected one of {sorted(COORDINATE_SYSTEMS)}"
             )
         if self.x1 < self.x0 or self.y1 < self.y0:
-            raise ValueError(
-                f"degenerate bbox ({self.x0}, {self.y0}, {self.x1}, {self.y1})"
-            )
+            raise ValueError(f"degenerate bbox ({self.x0}, {self.y0}, {self.x1}, {self.y1})")
         if self.coordinate_system == PAGE_SPACE_SYSTEM and not (
             0.0 <= self.x0 <= self.x1 <= 1.0 and 0.0 <= self.y0 <= self.y1 <= 1.0
         ):
@@ -113,7 +114,7 @@ class EvidenceNode(BaseModel):
         return f"{self.evidence_type.value}:{self.content_hash[:24]}"
 
     @model_validator(mode="after")
-    def _validate_envelope(self) -> "EvidenceNode":
+    def _validate_envelope(self) -> EvidenceNode:
         """Envelope checks shared by every evidence kind."""
         if not is_content_hash(self.content_hash):
             raise ValueError(
@@ -153,7 +154,7 @@ class OcrObservation(EvidenceNode):
     crop_local_bbox: BBox | None = None
 
     @model_validator(mode="after")
-    def _validate_observation(self) -> "OcrObservation":
+    def _validate_observation(self) -> OcrObservation:
         if not 0.0 <= self.raw_confidence <= 1.0:
             raise ValueError(f"raw_confidence must be within [0, 1], got {self.raw_confidence}")
         if self.bbox is not None and not self.bbox.is_page_space:
@@ -238,7 +239,7 @@ class EvidenceSet(BaseModel):
     def by_id(self, evidence_id: str) -> EvidenceNode | None:
         return next((m for m in self.members if m.evidence_id == evidence_id), None)
 
-    def collapse_exact_duplicates(self, policy_id: str) -> tuple["EvidenceSet", str]:
+    def collapse_exact_duplicates(self, policy_id: str) -> tuple[EvidenceSet, str]:
         """Collapse byte-identical detections under a recorded policy operation.
 
         Returns a *new* set plus the operation id that produced it. Exact
@@ -252,16 +253,20 @@ class EvidenceSet(BaseModel):
                 continue
             seen.add(member.content_hash)
             kept.append(member)
-        operation_id = content_hash({
-            "policy_id": policy_id,
-            "set_id": self.set_id,
-            "input_hashes": [member.content_hash for member in self.members],
-            "kept_hashes": [member.content_hash for member in kept],
-        })
-        collapsed = self.model_copy(update={
-            "set_id": f"{self.set_id}:collapsed:{operation_id[:12]}",
-            "members": tuple(kept),
-        })
+        operation_id = content_hash(
+            {
+                "policy_id": policy_id,
+                "set_id": self.set_id,
+                "input_hashes": [member.content_hash for member in self.members],
+                "kept_hashes": [member.content_hash for member in kept],
+            }
+        )
+        collapsed = self.model_copy(
+            update={
+                "set_id": f"{self.set_id}:collapsed:{operation_id[:12]}",
+                "members": tuple(kept),
+            }
+        )
         return collapsed, operation_id
 
 

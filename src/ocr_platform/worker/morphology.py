@@ -9,7 +9,6 @@ import re
 
 import cv2
 import numpy as np
-
 from pydantic import BaseModel
 
 NULL_RE = re.compile(r"^[\-_—~=−‒]+\.?$")
@@ -35,8 +34,12 @@ class ContourMorphologyEngine:
         ink = float(np.sum(bw > 0)) / bw.size
         if ink < 0.005:
             return GeometryProfile(
-                cell_id=cell_id, glyph_type="empty",
-                ink_density=ink, contour_count=0, is_checkbox=False, is_code1_stroke=False,
+                cell_id=cell_id,
+                glyph_type="empty",
+                ink_density=ink,
+                contour_count=0,
+                is_checkbox=False,
+                is_code1_stroke=False,
             )
         cnts, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         h, w = crop_bgr.shape[:2]
@@ -50,6 +53,10 @@ class ContourMorphologyEngine:
         is_c1 = "resident_code" in field_key and ink < 0.03 and len(cnts) <= 2
         glyph = "stroke" if is_cb or is_c1 else "printed" if len(cnts) > 5 else "handwritten"
         return GeometryProfile(
-            cell_id=cell_id, glyph_type=glyph, ink_density=ink,
-            contour_count=len(cnts), is_checkbox=is_cb, is_code1_stroke=is_c1,
+            cell_id=cell_id,
+            glyph_type=glyph,
+            ink_density=ink,
+            contour_count=len(cnts),
+            is_checkbox=is_cb,
+            is_code1_stroke=is_c1,
         )

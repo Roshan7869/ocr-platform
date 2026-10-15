@@ -2,5 +2,22 @@
   "schema_version": 1,
   "template_version": "FAMILY_SURVEY_V1",
   "notes": "Seed only. Entries require survey classification (synthetic | approved_redacted) before loader use. See docs/data-plan.md. Content hash must be sha256 of exact PDF bytes at allowed_storage_location.",
-  "fixtures": []
+  "fixtures": [
+    {
+      "fixture_id": "smoke-001",
+      "path": "fixtures/smoke-001/smoke-001.pdf",
+      "content_hash_sha256": "7504cd2306a2d7b1c742cd82ccdc6d6f19241b260087ee9bbf7987918af1d688",
+      "classification": "synthetic",
+      "source_owner": "engineering (PIL-synthesized, PII-free by construction)",
+      "redaction_method": null,
+      "redaction_approver": null,
+      "allowed_storage_location": "repo fixtures/",
+      "expiry": "2030-01-01T00:00:00+00:00",
+      "template_version": "FAMILY_SURVEY_V1",
+      "split": null,
+      "role": "smoke",
+      "ward_batch": null,
+      "notes": "Stream A2 synthetic two-page smoke fixture. All text is synthetic codes (SYN-*); no real names, mobiles, addresses, or survey answers."
+    }
+  ]
 }

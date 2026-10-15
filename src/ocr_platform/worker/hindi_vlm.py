@@ -11,15 +11,14 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
-import json
 from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
-
 
 _MODEL_ID = os.environ.get("HINDI_VLM_MODEL_ID", "shaoncvit/HindiOCR-VLM")
 # FormLens and HindiOCR-VLM are LoRA adapters trained from GOT-OCR2.0.
@@ -51,7 +50,8 @@ class HindiVLMEngine:
 
         # The pip distribution is named ms-swift; its Python module/CLI is swift.
         try:
-            import swift  # noqa: F401
+            import swift
+
             self._swift_infer = swift.infer
         except ImportError:
             self._failure = "swift_not_installed"
@@ -65,7 +65,11 @@ class HindiVLMEngine:
             candidate = cache_base / f"models--{_MODEL_ID.replace('/', '--')}"
             if candidate.exists():
                 # Find the snapshot with adapter weights
-                for snap in (candidate / "snapshots").iterdir() if (candidate / "snapshots").exists() else []:
+                for snap in (
+                    (candidate / "snapshots").iterdir()
+                    if (candidate / "snapshots").exists()
+                    else []
+                ):
                     if (snap / "adapter_config.json").exists():
                         adapter = str(snap)
                         break
@@ -117,7 +121,7 @@ class HindiVLMEngine:
                 # Each call still loads the model into VRAM, but we avoid
                 # Python process spawn overhead and get better error handling.
                 try:
-                    result = self._swift_infer(
+                    self._swift_infer(
                         model=_BASE_MODEL,
                         adapters=self._adapter_dir,
                         infer_backend="transformers",
@@ -129,7 +133,7 @@ class HindiVLMEngine:
                         result_path=str(result_path),
                         output_dir=str(work / "output"),
                     )
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - VLM backend raises varied runtime errors; failure degrades to review-only
                     self._failure = f"swift_infer_exception: {e}"
                     return empty
 
@@ -138,7 +142,7 @@ class HindiVLMEngine:
                     {"value": value, "conf": 0.80, "engine": "hindiocr_vlm"} if value else None
                     for value in predictions
                 ]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - VLM batch tempdir covers varied I/O/model errors; failure degrades to review-only
             self._failure = f"swift_infer_exception: {e}"
             return empty
 
@@ -146,13 +150,19 @@ class HindiVLMEngine:
         """Write one multimodal JSONL record per crop for batch inference."""
         with path.open("w", encoding="utf-8") as stream:
             for image_path in image_paths:
-                json.dump({
-                    "messages": [{
-                        "role": "user",
-                        "content": "<image>OCR this handwritten Hindi form field. Output only the text.",
-                    }],
-                    "images": [image_path],
-                }, stream, ensure_ascii=False)
+                json.dump(
+                    {
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": "<image>OCR this handwritten Hindi form field. Output only the text.",
+                            }
+                        ],
+                        "images": [image_path],
+                    },
+                    stream,
+                    ensure_ascii=False,
+                )
                 stream.write("\n")
         return path
 
@@ -167,7 +177,7 @@ class HindiVLMEngine:
                         resp = data.get("response", "").strip()
                         if resp:
                             values.append(resp)
-            except Exception:
+            except Exception:  # noqa: BLE001, S112 - corrupt/missing VLM result files are skipped; no logging surface in this module
                 continue
         return (values + [None] * expected)[:expected]
 

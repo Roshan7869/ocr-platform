@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
-import uuid
 from pathlib import Path
-from typing import Any
 
 
 class EvidenceStore:
@@ -84,25 +82,39 @@ class EvidenceStore:
             self._ensure_column(c, "qa_anomalies", "status", "TEXT DEFAULT 'pending'")
 
     @staticmethod
-    def _ensure_column(connection: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    def _ensure_column(
+        connection: sqlite3.Connection, table: str, column: str, definition: str
+    ) -> None:
         columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
         if column not in columns:
             connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def start_run(self, run_id: str, doc_count: int = 0) -> None:
         with sqlite3.connect(self.db_path) as c:
-            c.execute("INSERT OR REPLACE INTO run_meta VALUES (?, ?, NULL, ?, 0, 0, 0, 0, 'running')",
-                      (run_id, time.time(), doc_count))
+            c.execute(
+                "INSERT OR REPLACE INTO run_meta VALUES (?, ?, NULL, ?, 0, 0, 0, 0, 'running')",
+                (run_id, time.time(), doc_count),
+            )
 
     def finish_run(self, run_id: str) -> None:
         with sqlite3.connect(self.db_path) as c:
-            c.execute("UPDATE run_meta SET finished_at=?, status='done' WHERE run_id=?", (time.time(), run_id))
+            c.execute(
+                "UPDATE run_meta SET finished_at=?, status='done' WHERE run_id=?",
+                (time.time(), run_id),
+            )
 
-    def log_cell(self, run_id: str, cell: dict, ocr_res: dict, laya_decision: dict,
-                 norm_value: str, is_ditto: bool = False,
-                 inherited_from: str = "", norm_flag: str = "") -> None:
+    def log_cell(
+        self,
+        run_id: str,
+        cell: dict,
+        ocr_res: dict,
+        laya_decision: dict,
+        norm_value: str,
+        is_ditto: bool = False,
+        inherited_from: str = "",
+        norm_flag: str = "",
+    ) -> None:
         """Log a single cell's evidence."""
-        arb = ocr_res.get("resolved", "")
         arb_conf = max((c.get("conf", 0.0) for c in ocr_res.get("candidates", [])), default=0.0)
         row = {
             "doc_id": cell.get("doc_id", ""),
@@ -132,16 +144,22 @@ class EvidenceStore:
         cols = list(row.keys())
         placeholders = ",".join("?" * len(cols))
         with sqlite3.connect(self.db_path) as c:
-            c.execute(f"INSERT INTO evidence_log ({','.join(cols)}) VALUES ({placeholders})",
-                      list(row.values()))
+            c.execute(
+                f"INSERT INTO evidence_log ({','.join(cols)}) VALUES ({placeholders})",
+                list(row.values()),
+            )
             # Log each Laya layer
             for layer_name, layer_data in laya_decision.get("laya_layers", {}).items():
                 details = str(layer_data).replace("'", '"')
                 c.execute(
                     "INSERT INTO laya_decisions (doc_id, page_index, run_id, cell_id, row_idx, field_key, layer, decision, confidence, details) VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (
-                        cell.get("doc_id", ""), cell.get("page_index", 0), run_id, cell.get("cell_id", ""),
-                        cell.get("row_idx", 0), cell.get("field_key", ""),
+                        cell.get("doc_id", ""),
+                        cell.get("page_index", 0),
+                        run_id,
+                        cell.get("cell_id", ""),
+                        cell.get("row_idx", 0),
+                        cell.get("field_key", ""),
                         layer_name,
                         layer_data.get("decision", ""),
                         layer_data.get("confidence", 0.0),
@@ -198,12 +216,22 @@ class EvidenceStore:
     def get_evidence(self, run_id: str) -> list[dict]:
         with sqlite3.connect(self.db_path) as c:
             c.row_factory = sqlite3.Row
-            return [dict(r) for r in c.execute("SELECT * FROM evidence_log WHERE run_id=?", (run_id,)).fetchall()]
+            return [
+                dict(r)
+                for r in c.execute(
+                    "SELECT * FROM evidence_log WHERE run_id=?", (run_id,)
+                ).fetchall()
+            ]
 
     def get_qa_anomalies(self, run_id: str) -> list[dict]:
         with sqlite3.connect(self.db_path) as c:
             c.row_factory = sqlite3.Row
-            return [dict(r) for r in c.execute("SELECT * FROM qa_anomalies WHERE run_id=?", (run_id,)).fetchall()]
+            return [
+                dict(r)
+                for r in c.execute(
+                    "SELECT * FROM qa_anomalies WHERE run_id=?", (run_id,)
+                ).fetchall()
+            ]
 
     def load_previous_runs(self, exclude_run_id: str = "") -> list[dict]:
         """Load evidence_log rows from all runs except the current one."""

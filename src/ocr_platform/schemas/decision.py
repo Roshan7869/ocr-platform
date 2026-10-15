@@ -18,10 +18,10 @@ typed mirror. New codes must be added there first.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import Enum
-from typing import Iterable
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 # --- reason-code registry ------------------------------------------------
 # Tiers mirror docs/reason-codes.md §4 precedence, most severe first.
@@ -82,11 +82,13 @@ REASON_CODE_TIERS: dict[str, int] = {
 }
 
 #: Tokens that appear in prose but are NOT dispositions or reason codes.
-NOT_REASON_CODES = frozenset({
-    "AUTO_ACCEPTED",
-    "NORMALIZED_ACCEPTED",
-    "BOUNDARY_EXPAND",
-})
+NOT_REASON_CODES = frozenset(
+    {
+        "AUTO_ACCEPTED",
+        "NORMALIZED_ACCEPTED",
+        "BOUNDARY_EXPAND",
+    }
+)
 
 
 class Scope(str, Enum):
@@ -117,11 +119,13 @@ class AcceptedBy(str, Enum):
     human = "human"
 
 
-REGION_REQUIRED_STATES = frozenset({
-    ValueState.absent,
-    ValueState.unreadable,
-    ValueState.not_applicable,
-})
+REGION_REQUIRED_STATES = frozenset(
+    {
+        ValueState.absent,
+        ValueState.unreadable,
+        ValueState.not_applicable,
+    }
+)
 
 
 def is_known_reason_code(code: str) -> bool:
@@ -171,7 +175,7 @@ class FieldDecision(BaseModel):
     revision_of_decision_id: str | None = None
 
     @model_validator(mode="after")
-    def _validate(self) -> "FieldDecision":
+    def _validate(self) -> FieldDecision:
         unknown = [c for c in self.reason_codes if not is_known_reason_code(c)]
         if unknown:
             raise ValueError(
@@ -189,17 +193,18 @@ class FieldDecision(BaseModel):
 
         # Semantic checks run before the primary_reason consistency check so a
         # malformed decision reports its real defect, not a downstream mismatch.
-        if self.value_state is ValueState.present and self.final_value is not None:
-            if not self.source_set:
-                raise ValueError(
-                    "FINAL_VALUE MUST NEVER EXIST WITHOUT PROVENANCE: a present "
-                    "value requires a non-empty source_set"
-                )
+        if (
+            self.value_state is ValueState.present
+            and self.final_value is not None
+            and not self.source_set
+        ):
+            raise ValueError(
+                "FINAL_VALUE MUST NEVER EXIST WITHOUT PROVENANCE: a present "
+                "value requires a non-empty source_set"
+            )
 
         if self.value_state in REGION_REQUIRED_STATES and self.final_value is not None:
-            raise ValueError(
-                f"value_state={self.value_state.value} cannot carry a final_value"
-            )
+            raise ValueError(f"value_state={self.value_state.value} cannot carry a final_value")
 
         if self.disposition is Disposition.accepted:
             if self.value_state is not ValueState.present:
@@ -220,11 +225,10 @@ class FieldDecision(BaseModel):
                     f"accepted decision cannot carry review reason codes {list(self.reason_codes)}"
                 )
 
-        if self.disposition in (Disposition.review, Disposition.errored):
-            if not self.reason_codes:
-                raise ValueError(
-                    f"disposition={self.disposition.value} requires at least one reason code"
-                )
+        if self.disposition in (Disposition.review, Disposition.errored) and not self.reason_codes:
+            raise ValueError(
+                f"disposition={self.disposition.value} requires at least one reason code"
+            )
 
         if self.page_index is not None and self.page_index < 0:
             raise ValueError("page_index must be non-negative")
@@ -271,12 +275,15 @@ class DecisionRevision(BaseModel):
     created_at: float = 0.0
 
     @model_validator(mode="after")
-    def _validate(self) -> "DecisionRevision":
+    def _validate(self) -> DecisionRevision:
         if self.revised_decision.decision_id != self.decision_id:
             raise ValueError("revision must carry the same decision_id it revises")
         if self.revision_index < 1:
             raise ValueError("revision_index starts at 1; the original is index 0")
-        if self.reviewer_id is not None and self.revised_decision.accepted_by is not AcceptedBy.human:
+        if (
+            self.reviewer_id is not None
+            and self.revised_decision.accepted_by is not AcceptedBy.human
+        ):
             raise ValueError("a human revision must record accepted_by=human")
         return self
 

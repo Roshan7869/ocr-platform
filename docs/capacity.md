@@ -116,9 +116,28 @@ Performance levers that could move throughput/latency but are **not yet evaluate
 
 ---
 
+## 7. Gate-5 spike (measured 2026-10-15, CPU)
+
+Full artifact: `runs/spike/2026-10-15/matrix.{json,md}` (verdict: conditional-go, exit 0).
+
+| Item | Measured |
+|---|---|
+| Render (pypdfium2 5.14.0, 2 pp @200 DPI) | 1655×2339 px/page, repeated render byte-identical |
+| OCR (PaddleOCR 3.7.0 / paddle 3.3.1, `enable_mkldnn=False`, PP-OCRv6_medium det+rec) | **314–318 s/doc** per pass, 3/3 passes canonical-JSON identical |
+| Regions | 58 + 53 detected regions on smoke-001 (synthetic, PII-free) |
+| Host RAM | 15858 MiB total; no OOM |
+| GPU | skipped — no nvidia-smi/CUDA on laptop (recorded caveat) |
+
+**Finding:** 314–318 s/doc exceeds the §3 15–90 s/doc estimate band (that band assumed
+PP-OCRv5 **mobile** with oneDNN; the spike ran PP-OCRv6 **medium** with
+`enable_mkldnn=False` after the default oneDNN path raised `NotImplementedError` on
+this CPU/paddle build). Laptop CPU stays viable for smoke/gate runs only;
+production remains cloud-GPU per ADR-003. Re-measure on GPU hardware when available.
+
 ## 8. Update log
 
 | Date | Change |
 |---|---|
 | 2026-09-24 | Initial: host metrics, render timings, region estimate, corpus size, placement decision |
 | 2026-09-27 | Added §6.5 optimization lever register (quantization, batching, I/O, warm pool — flagged unmeasured); linked levers to `research-gaps.md` |
+| 2026-10-15 | Added §7 Gate-5 spike measurements (CPU 314–318 s/doc, conditional-go); estimate band §3 exceeded on laptop CPU |

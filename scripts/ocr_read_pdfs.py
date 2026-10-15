@@ -1,4 +1,5 @@
 """Read all PDFs in a directory using PaddleOCR and save extracted text."""
+
 import json
 import os
 import sys
@@ -28,6 +29,7 @@ def ocr_pdf(pdf_path: Path, ocr: PaddleOCR, dpi: int = 200) -> dict:
 
             # PaddleOCR expects numpy array (BGR)
             import numpy as np
+
             img_array = np.array(pil_image)[:, :, ::-1].copy()
 
             result = ocr.ocr(img_array)
@@ -38,7 +40,7 @@ def ocr_pdf(pdf_path: Path, ocr: PaddleOCR, dpi: int = 200) -> dict:
                 if res and isinstance(res, list):
                     for line in res:
                         if isinstance(line, list) and len(line) >= 2:
-                            bbox, (text, score) = line[0], line[1]
+                            _bbox, (text, score) = line[0], line[1]
                             page_text.append({"text": text, "confidence": round(float(score), 4)})
                 elif isinstance(res, dict):
                     res = res.get("res", res)
@@ -46,16 +48,20 @@ def ocr_pdf(pdf_path: Path, ocr: PaddleOCR, dpi: int = 200) -> dict:
                         for text, score in zip(res["rec_texts"], res["rec_scores"]):
                             page_text.append({"text": text, "confidence": round(float(score), 4)})
                     elif res and "rec_text" in res:
-                        page_text.append({
-                            "text": res["rec_text"],
-                            "confidence": round(float(res.get("rec_score", 0)), 4)
-                        })
+                        page_text.append(
+                            {
+                                "text": res["rec_text"],
+                                "confidence": round(float(res.get("rec_score", 0)), 4),
+                            }
+                        )
 
-            pages.append({
-                "page": page_idx,
-                "regions": page_text,
-                "text": " ".join(r["text"] for r in page_text),
-            })
+            pages.append(
+                {
+                    "page": page_idx,
+                    "regions": page_text,
+                    "text": " ".join(r["text"] for r in page_text),
+                }
+            )
             print(f"  Page {page_idx}: {len(page_text)} regions", flush=True)
 
     return {
@@ -89,7 +95,7 @@ def main():
 
     results = []
     for i, pdf_path in enumerate(pdfs):
-        print(f"\n[{i+1}/{len(pdfs)}] Processing: {pdf_path.name}")
+        print(f"\n[{i + 1}/{len(pdfs)}] Processing: {pdf_path.name}")
         start = time.time()
         try:
             result = ocr_pdf(pdf_path, ocr)
@@ -97,22 +103,29 @@ def main():
             result["elapsed_seconds"] = round(elapsed, 2)
             results.append(result)
             print(f"  Done in {elapsed:.1f}s — {len(result['full_text'])} chars")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - per-PDF failures must not abort batch; error recorded per file
             print(f"  ERROR: {e}")
-            results.append({
-                "pdf_path": str(pdf_path),
-                "pdf_name": pdf_path.name,
-                "error": str(e),
-                "page_count": 0,
-                "pages": [],
-                "full_text": "",
-            })
+            results.append(
+                {
+                    "pdf_path": str(pdf_path),
+                    "pdf_name": pdf_path.name,
+                    "error": str(e),
+                    "page_count": 0,
+                    "pages": [],
+                    "full_text": "",
+                }
+            )
 
     output.parent.mkdir(parents=True, exist_ok=True)
     with open(output, "w", encoding="utf-8") as f:
-        json.dump({"source": str(root), "pdf_count": len(pdfs), "results": results}, f, ensure_ascii=False, indent=2)
+        json.dump(
+            {"source": str(root), "pdf_count": len(pdfs), "results": results},
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Processed {len(pdfs)} PDFs")
     print(f"Results saved to: {output}")
     total_chars = sum(len(r.get("full_text", "")) for r in results)

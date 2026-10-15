@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from ocr_platform.document.loader import DocumentLoader, Page, _digest, _image_to_png
+from ocr_platform.document.loader import DocumentLoader, _digest, _image_to_png
 
 
 class TestDigest:

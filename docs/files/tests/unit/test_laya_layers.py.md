@@ -1,4 +1,4 @@
-# tests/test_laya_layers.py
+# tests/unit/test_laya_layers.py
 
 ## Role
 Tests deterministic and model-mode Laya layers and pipeline wiring.

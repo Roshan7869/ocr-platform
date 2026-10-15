@@ -15,9 +15,9 @@ works with no database at all, so tests and export can both call it.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Sequence
 
 from ocr_platform.schemas.decision import (
     REGION_REQUIRED_STATES,
@@ -85,7 +85,7 @@ class ValidationReport:
     def for_decision(self, decision_id: str) -> tuple[Violation, ...]:
         return tuple(v for v in self.violations if v.decision_id == decision_id)
 
-    def extend(self, violations: Iterable[Violation]) -> "ValidationReport":
+    def extend(self, violations: Iterable[Violation]) -> ValidationReport:
         return ValidationReport(violations=(*self.violations, *violations))
 
     def __bool__(self) -> bool:  # pragma: no cover - convenience
@@ -126,65 +126,90 @@ def validate_decision(
     # 1. Graph-level structural checks apply to every decision.
     if graph is not None:
         for node_id in graph.missing_intermediates(node_id=did):
-            violations.append(Violation(
-                ViolationCode.MISSING_INTERMEDIATE, did,
-                f"referenced node {node_id} is absent from the graph",
-            ))
+            violations.append(
+                Violation(
+                    ViolationCode.MISSING_INTERMEDIATE,
+                    did,
+                    f"referenced node {node_id} is absent from the graph",
+                )
+            )
         for node_id in graph.verify_hashes():
-            violations.append(Violation(
-                ViolationCode.BAD_HASH, node_id,
-                "stored content_hash does not match the node payload",
-            ))
+            violations.append(
+                Violation(
+                    ViolationCode.BAD_HASH,
+                    node_id,
+                    "stored content_hash does not match the node payload",
+                )
+            )
 
     # 2. Region-required states must carry RegionEvidence.
     required = _evidence_type_for(decision.value_state)
 
     # 3. Every value-bearing or accepted decision must resolve its evidence set.
     if decision.disposition is Disposition.accepted and not decision.source_set:
-        violations.append(Violation(
-            ViolationCode.MISSING_EVIDENCE, did,
-            "accepted decision has an empty source_set",
-        ))
+        violations.append(
+            Violation(
+                ViolationCode.MISSING_EVIDENCE,
+                did,
+                "accepted decision has an empty source_set",
+            )
+        )
 
     resolved_any = False
     for set_id in decision.source_set:
         evidence_set = evidence_sets.get(set_id)
         if evidence_set is None:
-            violations.append(Violation(
-                ViolationCode.MISSING_EVIDENCE, did,
-                f"source_set references unknown evidence set {set_id!r}",
-            ))
+            violations.append(
+                Violation(
+                    ViolationCode.MISSING_EVIDENCE,
+                    did,
+                    f"source_set references unknown evidence set {set_id!r}",
+                )
+            )
             continue
         resolved_any = True
 
         if not evidence_set.members:
-            violations.append(Violation(
-                ViolationCode.MISSING_EVIDENCE, did,
-                f"evidence set {set_id!r} has no members",
-            ))
+            violations.append(
+                Violation(
+                    ViolationCode.MISSING_EVIDENCE,
+                    did,
+                    f"evidence set {set_id!r} has no members",
+                )
+            )
             continue
 
         if required is EvidenceType.region and not evidence_set.of_type(required):
-            violations.append(Violation(
-                ViolationCode.WRONG_EVIDENCE_TYPE, did,
-                f"value_state={decision.value_state.value} requires RegionEvidence "
-                f"but set {set_id!r} has none",
-            ))
+            violations.append(
+                Violation(
+                    ViolationCode.WRONG_EVIDENCE_TYPE,
+                    did,
+                    f"value_state={decision.value_state.value} requires RegionEvidence "
+                    f"but set {set_id!r} has none",
+                )
+            )
 
-        if decision.value_state is ValueState.present:
-            if not any(_accepts_text(m.evidence_type) for m in evidence_set.members):
-                violations.append(Violation(
-                    ViolationCode.WRONG_EVIDENCE_TYPE, did,
+        if decision.value_state is ValueState.present and not any(
+            _accepts_text(m.evidence_type) for m in evidence_set.members
+        ):
+            violations.append(
+                Violation(
+                    ViolationCode.WRONG_EVIDENCE_TYPE,
+                    did,
                     "value_state=present requires OCR or native-text evidence",
-                ))
+                )
+            )
 
         if decision.accepted_by.value == "human" and not evidence_set.of_type(
             EvidenceType.human_correction
         ):
-            violations.append(Violation(
-                ViolationCode.WRONG_EVIDENCE_TYPE, did,
-                "human-accepted decision requires HumanCorrectionEvidence",
-            ))
+            violations.append(
+                Violation(
+                    ViolationCode.WRONG_EVIDENCE_TYPE,
+                    did,
+                    "human-accepted decision requires HumanCorrectionEvidence",
+                )
+            )
 
     # 4. Present-with-value but no resolved evidence at all.
     if (
@@ -192,10 +217,13 @@ def validate_decision(
         and decision.final_value is not None
         and not resolved_any
     ):
-        violations.append(Violation(
-            ViolationCode.MISSING_EVIDENCE, did,
-            "FINAL_VALUE MUST NEVER EXIST WITHOUT PROVENANCE: no resolvable evidence",
-        ))
+        violations.append(
+            Violation(
+                ViolationCode.MISSING_EVIDENCE,
+                did,
+                "FINAL_VALUE MUST NEVER EXIST WITHOUT PROVENANCE: no resolvable evidence",
+            )
+        )
 
     # 5. Orphan evidence: sets that exist but belong to no decision.
     # (Reported by validate_batch, which sees the whole population.)
@@ -207,19 +235,28 @@ def validate_decision(
             None,
         )
         if page is None:
-            violations.append(Violation(
-                ViolationCode.MISSING_PAGE_ARTIFACT, did,
-                f"page_index={decision.page_index} has no page artifact in the run",
-            ))
+            violations.append(
+                Violation(
+                    ViolationCode.MISSING_PAGE_ARTIFACT,
+                    did,
+                    f"page_index={decision.page_index} has no page artifact in the run",
+                )
+            )
 
     # 7. Revision links.
-    if decision.revision_of_decision_id is not None:
-        if graph is not None and graph.node(decision.revision_of_decision_id) is None:
-            violations.append(Violation(
-                ViolationCode.BROKEN_REVISION_LINK, did,
+    if (
+        decision.revision_of_decision_id is not None
+        and graph is not None
+        and graph.node(decision.revision_of_decision_id) is None
+    ):
+        violations.append(
+            Violation(
+                ViolationCode.BROKEN_REVISION_LINK,
+                did,
                 f"revision_of_decision_id {decision.revision_of_decision_id!r} "
                 "is not present in the graph",
-            ))
+            )
+        )
 
     # 8. Registration record required for page-scoped decisions.
     if (
@@ -227,10 +264,13 @@ def validate_decision(
         and decision.page_index is not None
         and not graph.nodes_of_type(NodeType.registration_transform)
     ):
-        violations.append(Violation(
-            ViolationCode.MISSING_REGISTRATION, did,
-            "no registration transform recorded for a page-scoped decision",
-        ))
+        violations.append(
+            Violation(
+                ViolationCode.MISSING_REGISTRATION,
+                did,
+                "no registration transform recorded for a page-scoped decision",
+            )
+        )
 
     return tuple(violations)
 
@@ -251,23 +291,27 @@ def validate_batch(
 
     for decision in decisions:
         referenced.update(decision.source_set)
-        violations.extend(
-            validate_decision(decision, evidence_sets, run=run, graph=graph)
-        )
+        violations.extend(validate_decision(decision, evidence_sets, run=run, graph=graph))
 
     for set_id in sorted(set(evidence_sets) - referenced):
-        violations.append(Violation(
-            ViolationCode.ORPHAN_EVIDENCE, "<batch>",
-            f"evidence set {set_id!r} is referenced by no decision",
-        ))
+        violations.append(
+            Violation(
+                ViolationCode.ORPHAN_EVIDENCE,
+                "<batch>",
+                f"evidence set {set_id!r} is referenced by no decision",
+            )
+        )
 
     if graph is not None:
         for node in graph.nodes:
             if not is_content_hash(node.content_hash):
-                violations.append(Violation(
-                    ViolationCode.BAD_HASH, node.node_id,
-                    "node content_hash is not a sha256 hex digest",
-                ))
+                violations.append(
+                    Violation(
+                        ViolationCode.BAD_HASH,
+                        node.node_id,
+                        "node content_hash is not a sha256 hex digest",
+                    )
+                )
 
     return ValidationReport(violations=tuple(violations))
 
@@ -284,13 +328,15 @@ def demote_to_review(decision: FieldDecision, report: ValidationReport) -> Field
         return decision
     codes = tuple(dict.fromkeys((*decision.reason_codes, "PROVENANCE_INCOMPLETE")))
     payload = decision.model_dump(mode="json")
-    payload.update({
-        "disposition": Disposition.review.value,
-        "final_value": None,
-        "accepted_by": AcceptedBy.none.value,
-        "reason_codes": list(codes),
-        "primary_reason": primary_reason(codes),
-    })
+    payload.update(
+        {
+            "disposition": Disposition.review.value,
+            "final_value": None,
+            "accepted_by": AcceptedBy.none.value,
+            "reason_codes": list(codes),
+            "primary_reason": primary_reason(codes),
+        }
+    )
     return FieldDecision.model_validate(payload)
 
 
@@ -345,8 +391,6 @@ def index_evidence(sets: Iterable[EvidenceSet]) -> dict[str, EvidenceNode]:
     return index
 
 
-def page_artifacts_for(
-    run: DocumentRun, page_index: int
-) -> PageArtifact | None:
+def page_artifacts_for(run: DocumentRun, page_index: int) -> PageArtifact | None:
     """Return the page artifact for *page_index*, or None."""
     return next((p for p in run.pages if p.page_index == page_index), None)

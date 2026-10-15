@@ -8,9 +8,9 @@ Household-level:
 
 from __future__ import annotations
 
-import torch
 from dataclasses import dataclass, field
-from typing import Any
+
+import torch
 
 from ocr_platform.laya.config import LayaConfig
 from ocr_platform.laya.layers import (
@@ -25,6 +25,7 @@ from ocr_platform.laya.layers import (
 @dataclass
 class CellDecision:
     """Structured decision for one cell after all Laya layers."""
+
     cell_id: str
     row_idx: int
     col_idx: int
@@ -60,21 +61,38 @@ class LayaPipeline:
 
     def _init_layers(self):
         cfg = self.config
-        self.geometry_gate = GeometryGateLayer(hidden=cfg.hidden_dim, dropout=cfg.dropout).to(self.device)
-        self.candidate_selector = CandidateSelectorLayer(hidden=cfg.hidden_dim, dropout=cfg.dropout).to(self.device)
-        self.semantic_validator = SemanticValidatorLayer(hidden=cfg.hidden_dim, dropout=cfg.dropout).to(self.device)
-        self.evidence_gate = EvidenceGateLayer(hidden=cfg.hidden_dim, dropout=cfg.dropout).to(self.device)
+        self.geometry_gate = GeometryGateLayer(hidden=cfg.hidden_dim, dropout=cfg.dropout).to(
+            self.device
+        )
+        self.candidate_selector = CandidateSelectorLayer(
+            hidden=cfg.hidden_dim, dropout=cfg.dropout
+        ).to(self.device)
+        self.semantic_validator = SemanticValidatorLayer(
+            hidden=cfg.hidden_dim, dropout=cfg.dropout
+        ).to(self.device)
+        self.evidence_gate = EvidenceGateLayer(hidden=cfg.hidden_dim, dropout=cfg.dropout).to(
+            self.device
+        )
         self.household_qa = HouseholdQALayer(
             hidden=cfg.hidden_dim, dropout=cfg.dropout, max_members=cfg.max_members
         ).to(self.device)
 
-    def process_cell(self, cell: dict, ocr_result: dict, final_value: str,
-                     is_ditto: bool, conf_visual: float, s_spatial: float,
-                     c_consistency: float, field_key: str, closed_vocab_fields: set,
-                     p_prior: float = 0.8,
-                     bayesian_posterior: float | None = None,
-                     bayesian_alpha: float | None = None,
-                     prior_n: int = 0) -> CellDecision:
+    def process_cell(
+        self,
+        cell: dict,
+        ocr_result: dict,
+        final_value: str,
+        is_ditto: bool,
+        conf_visual: float,
+        s_spatial: float,
+        c_consistency: float,
+        field_key: str,
+        closed_vocab_fields: set,
+        p_prior: float = 0.8,
+        bayesian_posterior: float | None = None,
+        bayesian_alpha: float | None = None,
+        prior_n: int = 0,
+    ) -> CellDecision:
         """Run all 4 cell-level Laya layers on a single cell.
 
         Args:
@@ -111,7 +129,10 @@ class LayaPipeline:
         snapped = final_value
         with torch.no_grad():
             l3 = self.semantic_validator(
-                raw=raw_text, snapped=snapped, field_key=field_key, closed_vocab_fields=closed_vocab_fields
+                raw=raw_text,
+                snapped=snapped,
+                field_key=field_key,
+                closed_vocab_fields=closed_vocab_fields,
             )
 
         # L4: EvidenceGate (with Bayesian posterior if available)

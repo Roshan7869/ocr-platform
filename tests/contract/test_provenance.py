@@ -6,9 +6,8 @@ hermetic — no model downloads, no database, no network.
 
 from __future__ import annotations
 
-import math
-
 import pytest
+from pydantic import ValidationError
 
 from ocr_platform.schemas.decision import (
     FAMILY_SURVEY_LABEL_MAP,
@@ -30,7 +29,6 @@ from ocr_platform.schemas.evidence import (
     BBox,
     EvidenceSet,
     EvidenceType,
-    HumanCorrectionEvidence,
     NativeTextEvidence,
     OcrObservation,
     RegionEvidence,
@@ -38,12 +36,12 @@ from ocr_platform.schemas.evidence import (
     page_space_bbox,
 )
 from ocr_platform.schemas.job import (
+    ConfigurationFingerprint,
     DocumentDisposition,
+    DocumentErrorCode,
     DocumentRun,
     PageArtifact,
     PageClass,
-    ConfigurationFingerprint,
-    DocumentErrorCode,
     RenderMetadata,
     RunAttempt,
     document_content_hash,
@@ -71,7 +69,6 @@ from ocr_platform.worker.provenance.validator import (
     ViolationCode,
     gate_export,
     validate_batch,
-    validate_decision,
 )
 from ocr_platform.worker.render.coordinates import (
     CoordinateSystemError,
@@ -95,15 +92,16 @@ PAGE = PageSize(width_px=1000, height_px=1400)
 # helpers
 # ---------------------------------------------------------------------------
 
+
 def make_fingerprint(**overrides) -> ConfigurationFingerprint:
-    base = dict(
-        template_manifest_hash=content_hash({"template": "family_survey_v1"}),
-        runtime_config_hash=content_hash({"dpi": 200}),
-        acceptance_policy_version="AcceptancePolicy-v1",
-        canonical_algorithm_id=CANONICAL_ALGORITHM_ID,
-        dpi=200,
-        engine_versions={"paddleocr": "3.0.0"},
-    )
+    base = {
+        "template_manifest_hash": content_hash({"template": "family_survey_v1"}),
+        "runtime_config_hash": content_hash({"dpi": 200}),
+        "acceptance_policy_version": "AcceptancePolicy-v1",
+        "canonical_algorithm_id": CANONICAL_ALGORITHM_ID,
+        "dpi": 200,
+        "engine_versions": {"paddleocr": "3.0.0"},
+    }
     base.update(overrides)
     return ConfigurationFingerprint(**base)
 
@@ -166,21 +164,21 @@ def _build_ocr(**overrides) -> OcrObservation:
     ``model_copy`` bypasses pydantic validators in v2, so tests that assert a
     validation error must build the object instead of copying a valid one.
     """
-    payload = dict(
-        source_page_index=0,
-        source_region_id="p0_r3_c1",
-        content_hash=content_hash({"text": "राम", "conf": 0.93}),
-        raw_text="राम",
-        raw_confidence=0.93,
-        det_model_version="paddle-det-3.0.0",
-        rec_model_version="paddle-rec-hi-3.0.0",
-        render_metadata_hash=content_hash({"renderer": "pypdfium2"}),
-        preprocess_metadata_hash=content_hash({"pad": 15}),
-        field_id="member_name",
-        row_index=3,
-        col_index=1,
-        bbox=page_space_bbox(0.10, 0.20, 0.30, 0.25),
-    )
+    payload = {
+        "source_page_index": 0,
+        "source_region_id": "p0_r3_c1",
+        "content_hash": content_hash({"text": "राम", "conf": 0.93}),
+        "raw_text": "राम",
+        "raw_confidence": 0.93,
+        "det_model_version": "paddle-det-3.0.0",
+        "rec_model_version": "paddle-rec-hi-3.0.0",
+        "render_metadata_hash": content_hash({"renderer": "pypdfium2"}),
+        "preprocess_metadata_hash": content_hash({"pad": 15}),
+        "field_id": "member_name",
+        "row_index": 3,
+        "col_index": 1,
+        "bbox": page_space_bbox(0.10, 0.20, 0.30, 0.25),
+    }
     payload.update(overrides)
     return OcrObservation(**payload)
 
@@ -219,22 +217,22 @@ def make_decision(
     source_set: tuple[str, ...] = ("set:member_name:r3",),
     **overrides,
 ) -> FieldDecision:
-    payload = dict(
-        decision_id=decision_id,
-        scope=Scope.field,
-        value_state=value_state,
-        disposition=disposition,
-        field_id="member_name",
-        page_index=0,
-        row_index=3,
-        final_value=final_value,
-        reason_codes=(),
-        primary_reason=None,
-        accepted_by=AcceptedBy.policy,
-        acceptance_policy_version="AcceptancePolicy-v1",
-        template_version="1.0",
-        source_set=source_set,
-    )
+    payload = {
+        "decision_id": decision_id,
+        "scope": Scope.field,
+        "value_state": value_state,
+        "disposition": disposition,
+        "field_id": "member_name",
+        "page_index": 0,
+        "row_index": 3,
+        "final_value": final_value,
+        "reason_codes": (),
+        "primary_reason": None,
+        "accepted_by": AcceptedBy.policy,
+        "acceptance_policy_version": "AcceptancePolicy-v1",
+        "template_version": "1.0",
+        "source_set": source_set,
+    }
     if disposition is Disposition.review:
         payload.update(accepted_by=AcceptedBy.none, acceptance_policy_version="")
     payload.update(overrides)
@@ -246,6 +244,7 @@ def make_decision(
 # ---------------------------------------------------------------------------
 # hashing.py
 # ---------------------------------------------------------------------------
+
 
 class TestCanonicalJson:
     def test_key_order_independence(self):
@@ -264,7 +263,7 @@ class TestCanonicalJson:
         assert canonical_json({"xs": (1, 2, 3)}) == canonical_json({"xs": [1, 2, 3]})
 
     def test_unicode_is_not_escaped(self):
-        assert canonical_json({"name": "राम"}) == '{"name":"राम"}'.encode("utf-8")
+        assert canonical_json({"name": "राम"}) == '{"name":"राम"}'.encode()
 
     def test_float_formatting_is_stable(self):
         assert canonical_json({"v": 1.5}) == b'{"v":1.5}'
@@ -314,6 +313,7 @@ class TestCanonicalJson:
 # evidence.py
 # ---------------------------------------------------------------------------
 
+
 class TestBBox:
     def test_bbox_rejects_missing_coordinate_system(self):
         with pytest.raises(ValueError, match="coordinate_system"):
@@ -345,7 +345,7 @@ class TestBBox:
 class TestEvidenceNodes:
     def test_nodes_are_immutable(self):
         node = make_ocr_observation()
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             node.raw_text = "tampered"
 
     def test_evidence_requires_source_region(self):
@@ -379,9 +379,7 @@ class TestEvidenceNodes:
 
     def test_ocr_bbox_must_be_page_space(self):
         with pytest.raises(ValueError, match="page-space"):
-            _build_ocr(
-                bbox=BBox(x0=0, y0=0, x1=5, y1=5, coordinate_system=CROP_LOCAL_TOP_LEFT)
-            )
+            _build_ocr(bbox=BBox(x0=0, y0=0, x1=5, y1=5, coordinate_system=CROP_LOCAL_TOP_LEFT))
 
     def test_crop_local_bbox_must_be_crop_local(self):
         with pytest.raises(ValueError, match="crop_local"):
@@ -434,7 +432,7 @@ class TestEvidenceSet:
 
     def test_evidence_set_is_immutable(self):
         evidence_set = make_evidence_set(make_ocr_observation())
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             evidence_set.set_id = "other"
 
     def test_by_id_lookup(self):
@@ -447,6 +445,7 @@ class TestEvidenceSet:
 # ---------------------------------------------------------------------------
 # coordinates.py
 # ---------------------------------------------------------------------------
+
 
 class TestCoordinates:
     def test_normalized_to_pixel_round_trip_within_epsilon(self):
@@ -469,7 +468,10 @@ class TestCoordinates:
 
     def test_pdf_media_box_origin_is_rebased(self):
         image = pdf_rect_to_image_bbox(
-            (100.0, 100.0, 200.0, 200.0), PAGE, dpi=72, media_box_points=(100.0, 100.0, 300.0, 300.0)
+            (100.0, 100.0, 200.0, 200.0),
+            PAGE,
+            dpi=72,
+            media_box_points=(100.0, 100.0, 300.0, 300.0),
         )
         assert image[0] == pytest.approx(0.0)
         assert image[2] == pytest.approx(100.0)
@@ -520,6 +522,7 @@ class TestCoordinates:
 # job.py
 # ---------------------------------------------------------------------------
 
+
 class TestRunIdentity:
     def test_identical_bytes_and_config_yield_same_run_id(self):
         assert make_run().run_id == make_run().run_id
@@ -569,11 +572,14 @@ class TestRunIdentity:
 
 
 class TestCapabilityMatrix:
-    @pytest.mark.parametrize("page_class,error_code", [
-        (PageClass.encrypted, DocumentErrorCode.ENCRYPTED_PDF),
-        (PageClass.corrupt, DocumentErrorCode.CORRUPT_PDF),
-        (PageClass.empty, DocumentErrorCode.EMPTY_DOCUMENT),
-    ])
+    @pytest.mark.parametrize(
+        "page_class,error_code",
+        [
+            (PageClass.encrypted, DocumentErrorCode.ENCRYPTED_PDF),
+            (PageClass.corrupt, DocumentErrorCode.CORRUPT_PDF),
+            (PageClass.empty, DocumentErrorCode.EMPTY_DOCUMENT),
+        ],
+    )
     def test_terminal_classes_error_the_document(self, page_class, error_code):
         run = make_run(pages=(make_page(0, page_class),))
         assert run.is_errored
@@ -637,9 +643,11 @@ class TestCapabilityMatrix:
 # provenance.py
 # ---------------------------------------------------------------------------
 
+
 def make_template_node() -> TemplateManifestNode:
     child = content_hash({"page_1_boundaries": "yaml-bytes"})
-    return TemplateManifestNode.build(template_version="1.0",
+    return TemplateManifestNode.build(
+        template_version="1.0",
         manifest_hash=content_hash({"manifest": True}),
         child_hashes={"page_1_boundaries.yaml": child},
     )
@@ -718,39 +726,75 @@ class TestProvenanceNodes:
 
 class TestProvenanceGraph:
     def _graph(self) -> ProvenanceGraph:
-        run_node = DocumentRunNode.build(run_id="run-1",
+        run_node = DocumentRunNode.build(
+            run_id="run-1",
             document_content_hash=content_hash(PDF_BYTES),
             configuration_fingerprint=make_fingerprint().fingerprint(),
-            template_version="1.0", page_count=1,
+            template_version="1.0",
+            page_count=1,
         )
-        page_node = PageArtifactNode.build(artifact_id="page:0", page_index=0,
-            page_content_hash=content_hash({"page": 0}), render_metadata_hash=content_hash({}),
-            width_px=PAGE.width_px, height_px=PAGE.height_px,
+        page_node = PageArtifactNode.build(
+            artifact_id="page:0",
+            page_index=0,
+            page_content_hash=content_hash({"page": 0}),
+            render_metadata_hash=content_hash({}),
+            width_px=PAGE.width_px,
+            height_px=PAGE.height_px,
         )
         tpl_node = make_template_node()
-        reg_node = RegistrationTransformNode.build(transform_type="page_box_normalize",
-            residual=0.0, template_manifest_hash=tpl_node.manifest_hash,
+        reg_node = RegistrationTransformNode.build(
+            transform_type="page_box_normalize",
+            residual=0.0,
+            template_manifest_hash=tpl_node.manifest_hash,
         )
-        crop_node = CropArtifactNode.build(crop_hash=content_hash({"crop": 1}),
-            page_index=0, region_id="p0_r3_c1", bbox=(0.1, 0.2, 0.3, 0.25),
+        crop_node = CropArtifactNode.build(
+            crop_hash=content_hash({"crop": 1}),
+            page_index=0,
+            region_id="p0_r3_c1",
+            bbox=(0.1, 0.2, 0.3, 0.25),
         )
-        set_node = EvidenceSetNode.build(set_id="set:1",
+        set_node = EvidenceSetNode.build(
+            set_id="set:1",
             member_evidence_ids=("ocr_observation:abc",),
             member_content_hashes=(content_hash({"text": "राम"}),),
         )
-        decision_node = DecisionRevisionNode.build(decision_id="d:1", revision_index=0,
+        decision_node = DecisionRevisionNode.build(
+            decision_id="d:1",
+            revision_index=0,
             evidence_set_node_id=None,
         )
         graph = ProvenanceGraph()
         for node in (run_node, page_node, tpl_node, reg_node, crop_node, set_node, decision_node):
             graph.add_node(node)
         edges = [
-            ProvenanceEdge(source_id=run_node.node_id, target_id=page_node.node_id, relation=EdgeRelation.renders),
-            ProvenanceEdge(source_id=page_node.node_id, target_id=tpl_node.node_id, relation=EdgeRelation.templates),
-            ProvenanceEdge(source_id=tpl_node.node_id, target_id=reg_node.node_id, relation=EdgeRelation.registers),
-            ProvenanceEdge(source_id=reg_node.node_id, target_id=crop_node.node_id, relation=EdgeRelation.crops),
-            ProvenanceEdge(source_id=crop_node.node_id, target_id=set_node.node_id, relation=EdgeRelation.evidences),
-            ProvenanceEdge(source_id=set_node.node_id, target_id=decision_node.node_id, relation=EdgeRelation.decides),
+            ProvenanceEdge(
+                source_id=run_node.node_id,
+                target_id=page_node.node_id,
+                relation=EdgeRelation.renders,
+            ),
+            ProvenanceEdge(
+                source_id=page_node.node_id,
+                target_id=tpl_node.node_id,
+                relation=EdgeRelation.templates,
+            ),
+            ProvenanceEdge(
+                source_id=tpl_node.node_id,
+                target_id=reg_node.node_id,
+                relation=EdgeRelation.registers,
+            ),
+            ProvenanceEdge(
+                source_id=reg_node.node_id, target_id=crop_node.node_id, relation=EdgeRelation.crops
+            ),
+            ProvenanceEdge(
+                source_id=crop_node.node_id,
+                target_id=set_node.node_id,
+                relation=EdgeRelation.evidences,
+            ),
+            ProvenanceEdge(
+                source_id=set_node.node_id,
+                target_id=decision_node.node_id,
+                relation=EdgeRelation.decides,
+            ),
         ]
         for edge in edges:
             graph.add_edge(edge)
@@ -781,7 +825,8 @@ class TestProvenanceGraph:
         # Drop a mid-chain node by rebuilding the graph without it.
         kept = [n for n in graph.nodes if "crop_artifact" not in n.node_type.value]
         edges = [
-            e for e in graph.edges
+            e
+            for e in graph.edges
             if "crop_artifact" not in e.source_id and "crop_artifact" not in e.target_id
         ]
         # The evidence-set node's incoming crop edge is gone, so the chain is
@@ -793,35 +838,54 @@ class TestProvenanceGraph:
     def test_cycles_are_rejected(self):
         from ocr_platform.schemas.provenance import DerivationNode
 
-        first = DerivationNode.build(operation_id="a",
-            input_hashes=(content_hash({"x": 1}),), output_hash=content_hash({"y": 1}),
-            rule_version="1", template_version="1",
+        first = DerivationNode.build(
+            operation_id="a",
+            input_hashes=(content_hash({"x": 1}),),
+            output_hash=content_hash({"y": 1}),
+            rule_version="1",
+            template_version="1",
         )
-        second = DerivationNode.build(operation_id="b",
-            input_hashes=(content_hash({"x": 2}),), output_hash=content_hash({"y": 2}),
-            rule_version="1", template_version="1",
+        second = DerivationNode.build(
+            operation_id="b",
+            input_hashes=(content_hash({"x": 2}),),
+            output_hash=content_hash({"y": 2}),
+            rule_version="1",
+            template_version="1",
         )
         graph = ProvenanceGraph([first, second])
-        graph.add_edge(ProvenanceEdge(source_id=first.node_id, target_id=second.node_id, relation=EdgeRelation.derives))
+        graph.add_edge(
+            ProvenanceEdge(
+                source_id=first.node_id, target_id=second.node_id, relation=EdgeRelation.derives
+            )
+        )
         with pytest.raises(ValueError, match="cycle"):
             graph.add_edge(
-                ProvenanceEdge(source_id=second.node_id, target_id=first.node_id, relation=EdgeRelation.derives)
+                ProvenanceEdge(
+                    source_id=second.node_id, target_id=first.node_id, relation=EdgeRelation.derives
+                )
             )
 
     def test_self_loops_rejected(self):
         from ocr_platform.schemas.provenance import DerivationNode
 
-        node = DerivationNode.build(operation_id="a",
-            input_hashes=(content_hash({"x": 1}),), output_hash=content_hash({"y": 1}),
-            rule_version="1", template_version="1",
+        node = DerivationNode.build(
+            operation_id="a",
+            input_hashes=(content_hash({"x": 1}),),
+            output_hash=content_hash({"y": 1}),
+            rule_version="1",
+            template_version="1",
         )
         with pytest.raises(ValueError, match="self-loop"):
-            ProvenanceEdge(source_id=node.node_id, target_id=node.node_id, relation=EdgeRelation.derives)
+            ProvenanceEdge(
+                source_id=node.node_id, target_id=node.node_id, relation=EdgeRelation.derives
+            )
 
     def test_edge_to_unknown_node_rejected(self):
         graph = ProvenanceGraph()
         with pytest.raises(ValueError, match="unknown node"):
-            graph.add_edge(ProvenanceEdge(source_id="a", target_id="b", relation=EdgeRelation.renders))
+            graph.add_edge(
+                ProvenanceEdge(source_id="a", target_id="b", relation=EdgeRelation.renders)
+            )
 
     def test_duplicate_node_id_rejected(self):
         node = make_template_node()
@@ -841,10 +905,15 @@ class TestProvenanceGraph:
 # decision.py
 # ---------------------------------------------------------------------------
 
+
 class TestDecisionVocabulary:
     def test_enum_exhaustiveness(self):
         assert {v.value for v in ValueState} == {
-            "present", "absent", "unknown", "unreadable", "not_applicable"
+            "present",
+            "absent",
+            "unknown",
+            "unreadable",
+            "not_applicable",
         }
         assert {d.value for d in Disposition} == {"accepted", "review", "rejected", "errored"}
         assert {s.value for s in Scope} == {"document", "page", "field", "cell"}
@@ -860,7 +929,8 @@ class TestDecisionVocabulary:
 
     def test_every_registered_code_is_registered_in_docs(self):
         # The registry in docs/reason-codes.md must cover every code here.
-        docs = open("docs/reason-codes.md", encoding="utf-8").read()
+        with open("docs/reason-codes.md", encoding="utf-8") as fh:
+            docs = fh.read()
         missing = [c for c in registered_reason_codes() if c not in docs]
         assert missing == [], f"codes missing from docs/reason-codes.md: {missing}"
 
@@ -967,8 +1037,16 @@ class TestDecisionVocabulary:
 
 class TestSurveyLabelMapping:
     def test_every_label_maps(self):
-        for label in ("CLEAR", "NORMALIZED", "AMBIGUOUS", "INVALID", "OUT_OF_BOUNDARY",
-                      "UNREADABLE", "MISSING", "UNKNOWN_VALUE"):
+        for label in (
+            "CLEAR",
+            "NORMALIZED",
+            "AMBIGUOUS",
+            "INVALID",
+            "OUT_OF_BOUNDARY",
+            "UNREADABLE",
+            "MISSING",
+            "UNKNOWN_VALUE",
+        ):
             state, disposition = map_survey_label(label)
             assert state in ValueState
             assert disposition in Disposition
@@ -988,8 +1066,14 @@ class TestSurveyLabelMapping:
 
     def test_label_map_covers_all_survey_labels(self):
         assert set(FAMILY_SURVEY_LABEL_MAP) == {
-            "CLEAR", "NORMALIZED", "AMBIGUOUS", "INVALID", "OUT_OF_BOUNDARY",
-            "UNREADABLE", "MISSING", "UNKNOWN_VALUE",
+            "CLEAR",
+            "NORMALIZED",
+            "AMBIGUOUS",
+            "INVALID",
+            "OUT_OF_BOUNDARY",
+            "UNREADABLE",
+            "MISSING",
+            "UNKNOWN_VALUE",
         }
 
     def test_unknown_label_rejected(self):
@@ -1000,6 +1084,7 @@ class TestSurveyLabelMapping:
 # ---------------------------------------------------------------------------
 # validator.py — the hard gate
 # ---------------------------------------------------------------------------
+
 
 class TestValidatorHappyPath:
     def test_minimum_graph_passes(self):
@@ -1085,9 +1170,7 @@ class TestValidatorViolations:
     def test_human_accepted_requires_human_evidence(self):
         run = make_run()
         evidence_set = make_evidence_set(make_ocr_observation(), set_id="set:human")
-        decision = make_decision(
-            source_set=("set:human",), accepted_by=AcceptedBy.human
-        )
+        decision = make_decision(source_set=("set:human",), accepted_by=AcceptedBy.human)
         report = validate_batch([decision], {"set:human": evidence_set}, run=run)
         assert any(v.code is ViolationCode.WRONG_EVIDENCE_TYPE for v in report.violations)
 
@@ -1113,9 +1196,12 @@ class TestValidatorViolations:
     def test_bad_hash_detected_via_graph(self):
         from ocr_platform.schemas.provenance import DerivationNode
 
-        node = DerivationNode.build(operation_id="a",
-            input_hashes=(content_hash({"x": 1}),), output_hash=content_hash({"y": 1}),
-            rule_version="1", template_version="1",
+        node = DerivationNode.build(
+            operation_id="a",
+            input_hashes=(content_hash({"x": 1}),),
+            output_hash=content_hash({"y": 1}),
+            rule_version="1",
+            template_version="1",
         )
         # Tamper with the payload after the hash was fixed: model_copy bypasses
         # validators, which is exactly what a tampered node looks like downstream.
@@ -1174,16 +1260,14 @@ class TestProvenanceGate:
         assert exportable[0].accepted_by is AcceptedBy.none
 
     def test_gate_does_not_touch_review_rows(self):
-        evidence_set = make_evidence_set(
-            make_ocr_observation(confidence=0.2), set_id="set:low"
-        )
+        evidence_set = make_evidence_set(make_ocr_observation(confidence=0.2), set_id="set:low")
         decision = make_decision(
             disposition=Disposition.review,
             final_value=None,
             source_set=("set:low",),
             reason_codes=("OCR_CONFIDENCE_LOW",),
         )
-        exportable, report = gate_export([decision], {"set:low": evidence_set})
+        exportable, _ = gate_export([decision], {"set:low": evidence_set})
         # A review row with valid evidence passes through untouched.
         assert exportable[0] is decision
 
@@ -1214,45 +1298,65 @@ class TestProvenanceGate:
 # end-to-end: provenance chain for one accepted field
 # ---------------------------------------------------------------------------
 
+
 class TestEndToEndProvenance:
     def test_full_chain_for_one_accepted_field(self):
         run = make_run()
-        page = run.pages[0]
 
         template = make_template_node()
-        registration = RegistrationTransformNode.build(transform_type="page_box_normalize", residual=0.0,
+        registration = RegistrationTransformNode.build(
+            transform_type="page_box_normalize",
+            residual=0.0,
             template_manifest_hash=template.manifest_hash,
         )
-        crop = CropArtifactNode.build(crop_hash=content_hash({"crop": "member_name_r3"}),
-            page_index=0, region_id="p0_r3_c1", bbox=(0.1, 0.2, 0.3, 0.25),
+        crop = CropArtifactNode.build(
+            crop_hash=content_hash({"crop": "member_name_r3"}),
+            page_index=0,
+            region_id="p0_r3_c1",
+            bbox=(0.1, 0.2, 0.3, 0.25),
         )
         observation = make_ocr_observation()
         evidence_set = make_evidence_set(observation)
-        set_node = EvidenceSetNode.build(set_id=evidence_set.set_id,
+        set_node = EvidenceSetNode.build(
+            set_id=evidence_set.set_id,
             member_evidence_ids=(observation.evidence_id,),
             member_content_hashes=(observation.content_hash,),
         )
-        decision_node = DecisionRevisionNode.build(decision_id="d:member_name:r3",
-            revision_index=0, evidence_set_node_id=set_node.node_id,
+        decision_node = DecisionRevisionNode.build(
+            decision_id="d:member_name:r3",
+            revision_index=0,
+            evidence_set_node_id=set_node.node_id,
         )
 
         graph = ProvenanceGraph([template, registration, crop, set_node, decision_node])
-        graph.add_edge(ProvenanceEdge(
-            source_id=template.node_id, target_id=registration.node_id,
-            relation=EdgeRelation.registers,
-        ))
-        graph.add_edge(ProvenanceEdge(
-            source_id=registration.node_id, target_id=crop.node_id,
-            relation=EdgeRelation.crops,
-        ))
-        graph.add_edge(ProvenanceEdge(
-            source_id=crop.node_id, target_id=set_node.node_id,
-            relation=EdgeRelation.evidences,
-        ))
-        graph.add_edge(ProvenanceEdge(
-            source_id=set_node.node_id, target_id=decision_node.node_id,
-            relation=EdgeRelation.decides,
-        ))
+        graph.add_edge(
+            ProvenanceEdge(
+                source_id=template.node_id,
+                target_id=registration.node_id,
+                relation=EdgeRelation.registers,
+            )
+        )
+        graph.add_edge(
+            ProvenanceEdge(
+                source_id=registration.node_id,
+                target_id=crop.node_id,
+                relation=EdgeRelation.crops,
+            )
+        )
+        graph.add_edge(
+            ProvenanceEdge(
+                source_id=crop.node_id,
+                target_id=set_node.node_id,
+                relation=EdgeRelation.evidences,
+            )
+        )
+        graph.add_edge(
+            ProvenanceEdge(
+                source_id=set_node.node_id,
+                target_id=decision_node.node_id,
+                relation=EdgeRelation.decides,
+            )
+        )
 
         decision = make_decision(source_set=(evidence_set.set_id,))
         report = validate_batch(

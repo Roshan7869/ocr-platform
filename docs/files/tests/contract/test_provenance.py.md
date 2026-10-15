@@ -1,4 +1,4 @@
-# tests/test_provenance.py
+# tests/contract/test_provenance.py
 
 ## Role
 

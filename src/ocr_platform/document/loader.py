@@ -9,9 +9,8 @@ from __future__ import annotations
 import hashlib
 import io
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from PIL import Image
 
@@ -19,6 +18,7 @@ from PIL import Image
 @dataclass(frozen=True)
 class Page:
     """One rendered page from a document."""
+
     doc_id: str
     page_index: int
     sha256: str
@@ -78,7 +78,9 @@ class DocumentLoader:
             return self._load_dir(source)
         if suffix in {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}:
             return self._load_single(source)
-        raise ValueError(f"Unsupported source type: {source} (expected .pdf, .zip, directory, or image file)")
+        raise ValueError(
+            f"Unsupported source type: {source} (expected .pdf, .zip, directory, or image file)"
+        )
 
     # ------------------------------------------------------------------
     # Private loaders
@@ -107,15 +109,17 @@ class DocumentLoader:
                         if w * h > 30_000_000:
                             raise ValueError(f"Rendered page {idx} exceeds 30-megapixel cap")
                         png_bytes = _image_to_png(pil)
-                        pages.append(Page(
-                            doc_id=doc_id,
-                            page_index=idx,
-                            sha256=_digest(png_bytes),
-                            width=w,
-                            height=h,
-                            image_bytes=png_bytes,
-                            source_path=str(path),
-                        ))
+                        pages.append(
+                            Page(
+                                doc_id=doc_id,
+                                page_index=idx,
+                                sha256=_digest(png_bytes),
+                                width=w,
+                                height=h,
+                                image_bytes=png_bytes,
+                                source_path=str(path),
+                            )
+                        )
                     finally:
                         bitmap.close()
                 finally:
@@ -129,10 +133,17 @@ class DocumentLoader:
         img = Image.open(io.BytesIO(data)).convert("RGB")
         png_bytes = _image_to_png(img)
         w, h = img.size
-        return [Page(
-            doc_id=doc_id, page_index=0, sha256=_digest(png_bytes),
-            width=w, height=h, image_bytes=png_bytes, source_path=str(path),
-        )]
+        return [
+            Page(
+                doc_id=doc_id,
+                page_index=0,
+                sha256=_digest(png_bytes),
+                width=w,
+                height=h,
+                image_bytes=png_bytes,
+                source_path=str(path),
+            )
+        ]
 
     def _load_zip(self, path: Path) -> list[Page]:
         doc_id = path.stem
@@ -145,37 +156,38 @@ class DocumentLoader:
                 img = Image.open(io.BytesIO(data)).convert("RGB")
                 png_bytes = _image_to_png(img)
                 w, h = img.size
-                pages.append(Page(
-                    doc_id=doc_id,
-                    page_index=idx,
-                    sha256=_digest(png_bytes),
-                    width=w,
-                    height=h,
-                    image_bytes=png_bytes,
-                    source_path=str(path),
-                ))
+                pages.append(
+                    Page(
+                        doc_id=doc_id,
+                        page_index=idx,
+                        sha256=_digest(png_bytes),
+                        width=w,
+                        height=h,
+                        image_bytes=png_bytes,
+                        source_path=str(path),
+                    )
+                )
         return pages
 
     def _load_dir(self, path: Path) -> list[Page]:
         doc_id = path.name
         pages: list[Page] = []
         image_exts = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
-        files = sorted(
-            p for p in path.iterdir()
-            if p.is_file() and p.suffix.lower() in image_exts
-        )
+        files = sorted(p for p in path.iterdir() if p.is_file() and p.suffix.lower() in image_exts)
         for idx, f in enumerate(files):
             data = f.read_bytes()
             img = Image.open(io.BytesIO(data)).convert("RGB")
             png_bytes = _image_to_png(img)
             w, h = img.size
-            pages.append(Page(
-                doc_id=doc_id,
-                page_index=idx,
-                sha256=_digest(png_bytes),
-                width=w,
-                height=h,
-                image_bytes=png_bytes,
-                source_path=str(f),
-            ))
+            pages.append(
+                Page(
+                    doc_id=doc_id,
+                    page_index=idx,
+                    sha256=_digest(png_bytes),
+                    width=w,
+                    height=h,
+                    image_bytes=png_bytes,
+                    source_path=str(f),
+                )
+            )
         return pages

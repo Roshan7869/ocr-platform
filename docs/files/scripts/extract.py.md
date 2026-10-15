@@ -24,7 +24,7 @@ CLI entrypoint for the R0 single-process extractor: load classified fixture or u
 
 ## Depends on
 
-- **Calls:** `worker/pipeline.py`, `export/json_export.py`, `export/review_candidates.py`, `fixtures/loader.py`
+- **Calls:** `orchestrator/pipeline.py` (`SurveyPipeline`), `export/writer.py` (`ExportEngine` via pipeline), `fixtures/loader.py` (guarded import — absent loader fails `--fixture` mode with exit 2, never a traceback)
 - **Called by:** humans, docker ENTRYPOINT, CI smoke
 
 ## Tests
@@ -39,7 +39,7 @@ R0
 
 ## Status
 
-SPEC
+IMPLEMENTED (Stream E; e2e OCR pending fixture loader + paddle pins)
 
 ## Owner
 

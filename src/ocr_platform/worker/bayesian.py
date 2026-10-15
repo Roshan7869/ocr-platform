@@ -16,16 +16,18 @@ Where:
     decay       = how fast prior trust grows (default 0.1 per observation)
     alpha_min   = floor on alpha so prior never fully dominates (default 0.2)
 """
+
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
 @dataclass
 class FieldPrior:
     """Running Bayesian state for one (field_key, glyph_type) pair."""
+
     field_key: str
     glyph_type: str
     n: int = 0
@@ -123,8 +125,12 @@ class BayesianScorer:
         cfg = self.config
         prior = self._get_prior(field_key, glyph_type)
 
-        likelihood = max(0.0, min(1.0, conf_visual)) * max(0.0, min(1.0, p_prior)) \
-                     * max(0.0, min(1.0, s_spatial)) * max(0.0, min(1.0, c_consistency))
+        likelihood = (
+            max(0.0, min(1.0, conf_visual))
+            * max(0.0, min(1.0, p_prior))
+            * max(0.0, min(1.0, s_spatial))
+            * max(0.0, min(1.0, c_consistency))
+        )
 
         alpha = max(cfg.alpha_min, 1.0 / (1.0 + prior.n * cfg.decay))
         posterior = alpha * likelihood + (1.0 - alpha) * prior.mean

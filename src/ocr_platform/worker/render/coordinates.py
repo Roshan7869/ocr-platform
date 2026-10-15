@@ -16,8 +16,8 @@ Systems handled:
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from ocr_platform.schemas.evidence import (
     CROP_LOCAL_TOP_LEFT,
@@ -81,10 +81,10 @@ def to_pixel(box: Box, page: PageSize) -> Box:
     sub-pixel boxes — quantization is documented here rather than hidden.
     """
     x0, y0, x1, y1 = _check_box(box)
-    px0 = max(0, int(round(x0 * page.width_px)))
-    py0 = max(0, int(round(y0 * page.height_px)))
-    px1 = min(page.width_px - 1, max(px0, int(round(x1 * page.width_px)) - 1))
-    py1 = min(page.height_px - 1, max(py0, int(round(y1 * page.height_px)) - 1))
+    px0 = max(0, round(x0 * page.width_px))
+    py0 = max(0, round(y0 * page.height_px))
+    px1 = min(page.width_px - 1, max(px0, round(x1 * page.width_px) - 1))
+    py1 = min(page.height_px - 1, max(py0, round(y1 * page.height_px) - 1))
     return (float(px0), float(py0), float(px1), float(py1))
 
 

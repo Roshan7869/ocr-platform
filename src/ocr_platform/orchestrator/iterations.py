@@ -103,8 +103,9 @@ def run_iterations(
     total_elapsed = time.time() - start_total
 
     # Convergence summary
-    auto_rates = [r["stats"].get("auto", 0) / max(r["stats"].get("cells", 1), 1)
-                  for r in iteration_results]
+    auto_rates = [
+        r["stats"].get("auto", 0) / max(r["stats"].get("cells", 1), 1) for r in iteration_results
+    ]
     prior_counts = [r["bayesian_priors"] for r in iteration_results]
 
     summary = {
@@ -117,9 +118,11 @@ def run_iterations(
         "convergence": {
             "auto_accept_rates": [round(r, 4) for r in auto_rates],
             "prior_field_counts": prior_counts,
-            "trend": "improving" if len(auto_rates) >= 2 and auto_rates[-1] > auto_rates[0]
-                     else "stable" if len(auto_rates) >= 2 and abs(auto_rates[-1] - auto_rates[0]) < 0.05
-                     else "degrading",
+            "trend": "improving"
+            if len(auto_rates) >= 2 and auto_rates[-1] > auto_rates[0]
+            else "stable"
+            if len(auto_rates) >= 2 and abs(auto_rates[-1] - auto_rates[0]) < 0.05
+            else "degrading",
         },
     }
 
@@ -153,7 +156,7 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     try:
-        summary = run_iterations(
+        run_iterations(
             input_path=args.input,
             template_path=args.template,
             output_dir=args.output,

@@ -5,14 +5,22 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Any
 
 DEV_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
-LOOKALIKE = str.maketrans({
-    "O": "0", "o": "0", "D": "0", "Q": "0",
-    "l": "1", "I": "1", "S": "5", "s": "5",
-    "B": "8", "Z": "2",
-})
+LOOKALIKE = str.maketrans(
+    {
+        "O": "0",
+        "o": "0",
+        "D": "0",
+        "Q": "0",
+        "l": "1",
+        "I": "1",
+        "S": "5",
+        "s": "5",
+        "B": "8",
+        "Z": "2",
+    }
+)
 PHONE_RE = re.compile(r"[6-9]\d{9}")
 
 INCOME_RE = re.compile(r"(\d+)\s*[kKक]")
@@ -50,6 +58,7 @@ def _parse_date(raw: str) -> tuple[str, str]:
     if y < 100:
         y += 2000
     from datetime import date
+
     try:
         dt = date(y, mo, d)
         today = date.today()
@@ -62,28 +71,54 @@ def _parse_date(raw: str) -> tuple[str, str]:
 def _normalize_education(raw: str) -> str:
     """Map education OCR values to canonical codes."""
     edu_map = {
-        "1": "below_primary", "4": "primary", "5": "upper_primary",
-        "6": "secondary", "8": "higher_secondary", "10": "matric",
-        "11": "inter", "12": "sr_secondary", "BA": "graduate",
-        "MA": "post_graduate", "NC": "not_known", "NURSERY": "nursery",
-        " nursery ": "nursery", "nursery": "nursery",
+        "1": "below_primary",
+        "4": "primary",
+        "5": "upper_primary",
+        "6": "secondary",
+        "8": "higher_secondary",
+        "10": "matric",
+        "11": "inter",
+        "12": "sr_secondary",
+        "BA": "graduate",
+        "MA": "post_graduate",
+        "NC": "not_known",
+        "NURSERY": "nursery",
+        " nursery ": "nursery",
+        "nursery": "nursery",
     }
     t = raw.strip().upper()
     return edu_map.get(t, raw)
 
 
 # Fields that should never receive ditto propagation
-NO_DITTO_FIELDS = {"education", "age", "member_name", "head_name", "mobile",
-                   "survey_date", "monthly_income", "occupation"}
+NO_DITTO_FIELDS = {
+    "education",
+    "age",
+    "member_name",
+    "head_name",
+    "mobile",
+    "survey_date",
+    "monthly_income",
+    "occupation",
+}
 
 # Integer identifier fields: Devanagari digits translate to ASCII digits that
 # may carry leading zeros ("०५" -> "05"). Strip them ("05" -> "5") so numeric
 # comparisons and QA rules operate on canonical values instead of crashing
 # or mis-sorting on zero-padded strings.
-INTEGER_ID_FIELDS = frozenset({
-    "sr_no", "age", "marriage_age", "resident_code",
-    "ward", "ward_no", "zone", "zone_no", "family_count",
-})
+INTEGER_ID_FIELDS = frozenset(
+    {
+        "sr_no",
+        "age",
+        "marriage_age",
+        "resident_code",
+        "ward",
+        "ward_no",
+        "zone",
+        "zone_no",
+        "family_count",
+    }
+)
 
 
 class SpatialNormalizer:

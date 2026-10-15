@@ -1,4 +1,4 @@
-# tests/test_docs_contract.py
+# tests/contract/test_docs_contract.py
 
 ## Role
 

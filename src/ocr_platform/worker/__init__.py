@@ -3,10 +3,13 @@
 Lazy imports — modules with heavy deps (cv2, torch) are only imported
 when accessed, so lightweight modules like bayesian can be used standalone.
 """
+
 from __future__ import annotations
 
+from typing import Any
+
 # Lightweight modules (no heavy deps)
-from ocr_platform.worker.bayesian import BayesianScorer, BayesianConfig, FieldPrior
+from ocr_platform.worker.bayesian import BayesianConfig, BayesianScorer, FieldPrior
 
 # Modules requiring cv2 — imported lazily via __getattr__
 _LAZY = {
@@ -29,6 +32,7 @@ def __getattr__(name: str) -> Any:
         return _loaded[name]
     if name in _LAZY:
         import importlib
+
         mod = importlib.import_module(_LAZY[name])
         obj = getattr(mod, name)
         _loaded[name] = obj
@@ -37,11 +41,16 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
-    "BayesianScorer", "BayesianConfig", "FieldPrior",
-    "Arbiter", "ArbiterDecision",
-    "ContourMorphologyEngine", "GeometryProfile",
-    "SpatialNormalizer",
-    "SemanticEngine", "CLOSED_VOCAB",
+    "CLOSED_VOCAB",
+    "Arbiter",
+    "ArbiterDecision",
+    "BayesianConfig",
+    "BayesianScorer",
+    "ContourMorphologyEngine",
+    "FieldPrior",
+    "GeometryProfile",
     "HindiVLMEngine",
     "RelationalQA",
+    "SemanticEngine",
+    "SpatialNormalizer",
 ]

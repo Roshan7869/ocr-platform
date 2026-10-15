@@ -41,7 +41,7 @@ R0
 
 ## Status
 
-SPEC
+IMPLEMENTED (Stream A2: stdlib-only gate; typed FixtureError rejects; smoke-001 synthetic entry)
 
 ## Owner
 

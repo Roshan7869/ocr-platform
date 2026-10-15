@@ -1,4 +1,4 @@
-# tests/test_training.py
+# tests/unit/test_training.py
 
 ## Role
 

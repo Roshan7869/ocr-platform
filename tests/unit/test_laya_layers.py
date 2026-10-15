@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 import torch
 
 from ocr_platform.laya.layers import (
@@ -14,8 +13,8 @@ from ocr_platform.laya.layers import (
     SemanticValidatorLayer,
 )
 
-
 # ── ClassificationHead ──────────────────────────────────────────────────
+
 
 class TestClassificationHead:
     def test_output_shape(self):
@@ -32,6 +31,7 @@ class TestClassificationHead:
 
 
 # ── GeometryGateLayer ───────────────────────────────────────────────────
+
 
 class TestGeometryGateLayer:
     def test_empty_cell(self):
@@ -76,6 +76,7 @@ class TestGeometryGateLayer:
 
 # ── CandidateSelectorLayer ──────────────────────────────────────────────
 
+
 class TestCandidateSelectorLayer:
     def test_no_candidates(self):
         layer = CandidateSelectorLayer()
@@ -113,6 +114,7 @@ class TestCandidateSelectorLayer:
 
 # ── SemanticValidatorLayer ──────────────────────────────────────────────
 
+
 class TestSemanticValidatorLayer:
     def test_closed_field_snap(self):
         layer = SemanticValidatorLayer()
@@ -132,6 +134,7 @@ class TestSemanticValidatorLayer:
 
 
 # ── EvidenceGateLayer ───────────────────────────────────────────────────
+
 
 class TestEvidenceGateLayer:
     def test_high_score_auto(self):
@@ -157,6 +160,7 @@ class TestEvidenceGateLayer:
 
 
 # ── HouseholdQALayer ────────────────────────────────────────────────────
+
 
 class TestHouseholdQALayer:
     def test_valid_household(self):
@@ -203,23 +207,34 @@ class TestHouseholdQALayer:
 
 # ── LayaPipeline ────────────────────────────────────────────────────────
 
+
 class TestLayaPipeline:
     def test_process_cell_gender(self):
         from ocr_platform.laya.config import LayaConfig
         from ocr_platform.laya.pipeline import LayaPipeline
+
         pipeline = LayaPipeline(config=LayaConfig(device="cpu"))
         cell = {
-            "cell_id": "test_0_0", "row_idx": 0, "col_idx": 0,
-            "field_key": "gender", "geometry": {},
+            "cell_id": "test_0_0",
+            "row_idx": 0,
+            "col_idx": 0,
+            "field_key": "gender",
+            "geometry": {},
         }
         ocr_result = {
             "candidates": [{"value": "M", "conf": 0.9, "engine": "paddle"}],
             "resolved": "M",
         }
         result = pipeline.process_cell(
-            cell=cell, ocr_result=ocr_result, final_value="पुरुष",
-            is_ditto=False, conf_visual=0.9, s_spatial=1.0, c_consistency=1.0,
-            field_key="gender", closed_vocab_fields={"gender"},
+            cell=cell,
+            ocr_result=ocr_result,
+            final_value="पुरुष",
+            is_ditto=False,
+            conf_visual=0.9,
+            s_spatial=1.0,
+            c_consistency=1.0,
+            field_key="gender",
+            closed_vocab_fields={"gender"},
         )
         assert result.field_key == "gender"
         assert result.glyph_type in GeometryGateLayer.LABELS
@@ -230,6 +245,7 @@ class TestLayaPipeline:
     def test_process_household(self):
         from ocr_platform.laya.config import LayaConfig
         from ocr_platform.laya.pipeline import LayaPipeline
+
         pipeline = LayaPipeline(config=LayaConfig(device="cpu"))
         members = [{"relation": "स्वयं", "gender": "पुरुष", "age": 40}]
         result = pipeline.process_household(members=members, relations=["स्वयं"])
@@ -238,6 +254,7 @@ class TestLayaPipeline:
     def test_state_dict_roundtrip(self):
         from ocr_platform.laya.config import LayaConfig
         from ocr_platform.laya.pipeline import LayaPipeline
+
         pipeline = LayaPipeline(config=LayaConfig(device="cpu"))
         state = pipeline.state_dict()
         assert "geometry_gate" in state

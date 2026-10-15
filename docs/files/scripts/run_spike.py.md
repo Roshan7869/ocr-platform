@@ -64,7 +64,7 @@ R0 (gate before extraction implementation use)
 
 ## Status
 
-SPEC
+IMPLEMENTED (not GitNexus VERIFIED).
 
 ## Owner
 

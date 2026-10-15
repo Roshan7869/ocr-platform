@@ -82,35 +82,55 @@ class RelationalQA:
 
         # Rule 1: exactly one head
         heads = [
-            i for i, m in enumerate(members)
+            i
+            for i, m in enumerate(members)
             if m.get("relation", "").strip() in ("स्वयं", "मुखिया", "HEAD", "SELF")
         ]
         if len(heads) != 1:
-            anoms.append(QAAnomaly(
-                anomaly_id=f"{doc_id}_p{page_index}_head_count", doc_id=doc_id, page_index=page_index, row_idx=-1,
-                field_key="relation", rule="head_count", severity="critical",
-                value=str(len(heads)), ctx=f"heads={heads}",
-                explanation=f"Expected 1 head, found {len(heads)}",
-            ))
+            anoms.append(
+                QAAnomaly(
+                    anomaly_id=f"{doc_id}_p{page_index}_head_count",
+                    doc_id=doc_id,
+                    page_index=page_index,
+                    row_idx=-1,
+                    field_key="relation",
+                    rule="head_count",
+                    severity="critical",
+                    value=str(len(heads)),
+                    ctx=f"heads={heads}",
+                    explanation=f"Expected 1 head, found {len(heads)}",
+                )
+            )
 
         # Find head row and head age (full-roster scan; head may be any row)
         head_idx = None
-        head_age: int | None = None
+        _head_age: int | None = None
         for i, m in enumerate(members):
             rel = m.get("relation", "").strip()
             if rel in ("स्वयं", "मुखिया", "HEAD", "SELF"):
                 head_idx = i
-                head_age = parse_int_or_none(m.get("age"))
+                _head_age = parse_int_or_none(m.get("age"))
                 break
 
         # Rule 2: no spouse without a head
-        if any(m.get("relation", "").strip() in ("पत्नी", "पति") for m in members) and head_idx is None:
-            anoms.append(QAAnomaly(
-                anomaly_id=f"{doc_id}_p{page_index}_spouse_no_head", doc_id=doc_id, page_index=page_index, row_idx=-1,
-                field_key="relation", rule="spouse_without_head", severity="high",
-                value="", ctx="spouse row found but no head",
-                explanation="Spouse exists but head not found",
-            ))
+        if (
+            any(m.get("relation", "").strip() in ("पत्नी", "पति") for m in members)
+            and head_idx is None
+        ):
+            anoms.append(
+                QAAnomaly(
+                    anomaly_id=f"{doc_id}_p{page_index}_spouse_no_head",
+                    doc_id=doc_id,
+                    page_index=page_index,
+                    row_idx=-1,
+                    field_key="relation",
+                    rule="spouse_without_head",
+                    severity="high",
+                    value="",
+                    ctx="spouse row found but no head",
+                    explanation="Spouse exists but head not found",
+                )
+            )
 
         # Rule 3: father must be ≥ 18 (skipped when age is unknown)
         for i, m in enumerate(members):
@@ -118,22 +138,38 @@ class RelationalQA:
             if age is None:
                 continue
             if m.get("relation", "").strip() == "पिता" and age < 18:
-                anoms.append(QAAnomaly(
-                    anomaly_id=f"{doc_id}_p{page_index}_pita_{i}", doc_id=doc_id, page_index=page_index, row_idx=i,
-                    field_key="age", rule="father_age", severity="high",
-                    value=str(age), ctx="relation=पिता",
-                    explanation="Father under 18",
-                ))
+                anoms.append(
+                    QAAnomaly(
+                        anomaly_id=f"{doc_id}_p{page_index}_pita_{i}",
+                        doc_id=doc_id,
+                        page_index=page_index,
+                        row_idx=i,
+                        field_key="age",
+                        rule="father_age",
+                        severity="high",
+                        value=str(age),
+                        ctx="relation=पिता",
+                        explanation="Father under 18",
+                    )
+                )
 
         # Rule 3: wife must be female
         for i, m in enumerate(members):
             if m.get("relation", "").strip() == "पत्नी" and m.get("gender", "").strip() == "पुरुष":
-                anoms.append(QAAnomaly(
-                    anomaly_id=f"{doc_id}_p{page_index}_wife_{i}", doc_id=doc_id, page_index=page_index, row_idx=i,
-                    field_key="gender", rule="wife_gender", severity="high",
-                    value=m.get("gender", ""), ctx="relation=पत्नी",
-                    explanation="Wife gender recorded as male",
-                ))
+                anoms.append(
+                    QAAnomaly(
+                        anomaly_id=f"{doc_id}_p{page_index}_wife_{i}",
+                        doc_id=doc_id,
+                        page_index=page_index,
+                        row_idx=i,
+                        field_key="gender",
+                        rule="wife_gender",
+                        severity="high",
+                        value=m.get("gender", ""),
+                        ctx="relation=पत्नी",
+                        explanation="Wife gender recorded as male",
+                    )
+                )
 
         # Persist
         with sqlite3.connect(self.db_path) as c:
@@ -143,7 +179,19 @@ class RelationalQA:
                        (anomaly_id, doc_id, page_index, run_id, row_idx, field_key, rule, severity,
                         current_value, ctx, explanation, created_at)
                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (a.anomaly_id, a.doc_id, a.page_index, run_id, a.row_idx, a.field_key,
-                     a.rule, a.severity, a.value, a.ctx, a.explanation, None),
+                    (
+                        a.anomaly_id,
+                        a.doc_id,
+                        a.page_index,
+                        run_id,
+                        a.row_idx,
+                        a.field_key,
+                        a.rule,
+                        a.severity,
+                        a.value,
+                        a.ctx,
+                        a.explanation,
+                        None,
+                    ),
                 )
         return anoms

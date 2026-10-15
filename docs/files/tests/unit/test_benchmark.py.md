@@ -1,4 +1,4 @@
-# tests/test_benchmark.py
+# tests/unit/test_benchmark.py
 
 ## Role
 
@@ -20,7 +20,7 @@ Called by: pytest / unittest discover. Python module imports define direct colla
 
 ## Tests
 
-Failure-aware scores, evidence/corpus integrity, API gates/contracts, retry accounting, sample stratification. See tests/test_benchmark.py.
+Failure-aware scores, evidence/corpus integrity, API gates/contracts, retry accounting, sample stratification. See tests/unit/test_benchmark.py.
 
 ## Milestone
 

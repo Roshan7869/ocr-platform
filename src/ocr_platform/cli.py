@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 from ocr_platform.laya.config import LayaConfig
@@ -20,7 +19,9 @@ def parser() -> argparse.ArgumentParser:
     run_cmd = sub.add_parser("run", help="Run full pipeline on PDF/ZIP/image directory")
     run_cmd.add_argument("--input", type=Path, required=True, help="PDF, ZIP, or image directory")
     run_cmd.add_argument("--template", type=Path, default=Path("configs/ward42_template.json"))
-    run_cmd.add_argument("--laya-model", type=Path, default=None, help="Optional Laya checkpoint dir")
+    run_cmd.add_argument(
+        "--laya-model", type=Path, default=None, help="Optional Laya checkpoint dir"
+    )
     run_cmd.add_argument("--output", type=Path, default=Path("runs/survey"))
     run_cmd.add_argument("--dpi", type=int, default=200)
     run_cmd.add_argument("--device", type=str, default="cpu")

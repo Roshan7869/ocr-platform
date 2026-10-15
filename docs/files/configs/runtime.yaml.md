@@ -70,7 +70,7 @@ R0
 
 ## Status
 
-SPEC
+IMPLEMENTED (not GitNexus VERIFIED).
 
 ## Owner
 

@@ -9,7 +9,7 @@ from scripts.check_docs_contract import SECTIONS, check
 
 class DocsContractTests(unittest.TestCase):
     def test_repository_implemented_files_have_contracts(self):
-        self.assertEqual(check(Path(__file__).resolve().parents[1]), [])
+        self.assertEqual(check(Path(__file__).resolve().parents[2]), [])
 
     def test_missing_contract_and_spec_only_status_fail(self):
         with tempfile.TemporaryDirectory() as directory:

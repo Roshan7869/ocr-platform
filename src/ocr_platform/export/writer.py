@@ -6,7 +6,6 @@ import json
 import sqlite3
 import zipfile
 from pathlib import Path
-from typing import Any
 
 
 class ExportEngine:
@@ -24,9 +23,7 @@ class ExportEngine:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
 
-        rows = conn.execute(
-            "SELECT * FROM evidence_log WHERE run_id=?", (run_id,)
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM evidence_log WHERE run_id=?", (run_id,)).fetchall()
         if not rows:
             conn.close()
             return None
@@ -35,25 +32,28 @@ class ExportEngine:
 
         # Long CSV (cell-level)
         import pandas as pd
+
         df = pd.DataFrame(evidence)
         long_csv = self.csv_dir / "extracted_cells_long.csv"
         df.to_csv(long_csv, index=False, encoding="utf-8-sig")
 
         # Anomaly CSV
-        anomalies = conn.execute(
-            "SELECT * FROM qa_anomalies WHERE run_id=?", (run_id,)
-        ).fetchall()
+        anomalies = conn.execute("SELECT * FROM qa_anomalies WHERE run_id=?", (run_id,)).fetchall()
         anom_path = None
         if anomalies:
             anom_path = self.csv_dir / "qa_anomalies.csv"
-            pd.DataFrame([dict(r) for r in anomalies]).to_csv(anom_path, index=False, encoding="utf-8-sig")
+            pd.DataFrame([dict(r) for r in anomalies]).to_csv(
+                anom_path, index=False, encoding="utf-8-sig"
+            )
 
         # Canonical wide output contains accepted values only. OCR observations
         # remain available in the long CSV and review-candidates export.
         accepted = df[df["disposition"] == "accepted"].copy()
         wide = accepted.pivot_table(
-            index=["doc_id", "page_index", "row_idx"], columns="field_key",
-            values="final_value", aggfunc="first",
+            index=["doc_id", "page_index", "row_idx"],
+            columns="field_key",
+            values="final_value",
+            aggfunc="first",
         ).reset_index()
         wide_csv = self.csv_dir / "households_wide.csv"
         wide.to_csv(wide_csv, index=False, encoding="utf-8-sig")
@@ -75,7 +75,8 @@ class ExportEngine:
                     m[fk] = match["final_value"].iloc[0] if len(match) else ""
                 m["row_idx"] = int(ri)
                 m["review_fields"] = [
-                    str(field) for field in row.loc[row["disposition"] != "accepted", "field_key"].tolist()
+                    str(field)
+                    for field in row.loc[row["disposition"] != "accepted", "field_key"].tolist()
                 ]
                 if "score" in row.columns and len(row):
                     m["composite_score"] = float(row["score"].iloc[0])
@@ -83,7 +84,8 @@ class ExportEngine:
                     m["route"] = row["route"].iloc[0]
                 if "low_conf" in row.columns and len(row):
                     m["low_confidence_fields"] = [
-                        fk for fk in col_keys
+                        fk
+                        for fk in col_keys
                         if len(row[(row["field_key"] == fk) & (row["low_conf"] == 1)])
                     ]
                 members.append(m)
@@ -94,9 +96,12 @@ class ExportEngine:
                 "total_members": len(members),
                 "members": members,
                 "qa_anomalies": [
-                    dict(anomaly) for anomaly in anomalies
+                    dict(anomaly)
+                    for anomaly in anomalies
                     if anomaly["doc_id"] == doc_id and anomaly["page_index"] == page_index
-                ] if anomalies else [],
+                ]
+                if anomalies
+                else [],
             }
             jp = self.json_dir / f"{doc_id}_p{int(page_index) + 1:02d}_household.json"
             jp.write_text(json.dumps(hh, ensure_ascii=False, indent=2), encoding="utf-8")

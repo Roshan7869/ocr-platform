@@ -16,8 +16,9 @@ is never sufficient, because the same name can point at different geometry.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import Enum
-from typing import Any, Iterable, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -61,9 +62,7 @@ class ProvenanceNode(BaseModel):
 
     def payload(self) -> dict[str, Any]:
         """The semantic content this node's hash and ID are derived from."""
-        return self.model_dump(
-            mode="json", exclude={"node_id", "content_hash", "created_at"}
-        )
+        return self.model_dump(mode="json", exclude={"node_id", "content_hash", "created_at"})
 
     def expected_ids(self) -> tuple[str, str]:
         """Recompute ``(node_id, content_hash)`` from the payload."""
@@ -76,7 +75,7 @@ class ProvenanceNode(BaseModel):
         return self.node_id == node_id and self.content_hash == digest
 
     @classmethod
-    def build(cls, **fields: Any) -> "ProvenanceNode":
+    def build(cls, **fields: Any) -> ProvenanceNode:
         """Construct a node with its content-addressed ID and hash filled in.
 
         The hash covers the payload only, so it can be computed before the ID
@@ -87,7 +86,7 @@ class ProvenanceNode(BaseModel):
         return probe.model_copy(update={"node_id": node_id, "content_hash": digest})
 
     @model_validator(mode="after")
-    def _validate_envelope(self) -> "ProvenanceNode":
+    def _validate_envelope(self) -> ProvenanceNode:
         if not is_content_hash(self.content_hash):
             raise ValueError(
                 f"{self.node_type.value} node requires a sha256 content_hash, "
@@ -126,7 +125,7 @@ class TemplateManifestNode(ProvenanceNode):
     child_hashes: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _validate_manifest(self) -> "TemplateManifestNode":
+    def _validate_manifest(self) -> TemplateManifestNode:
         if not is_content_hash(self.manifest_hash):
             raise ValueError(f"manifest_hash must be a sha256 digest, got {self.manifest_hash!r}")
         for name, digest in self.child_hashes.items():
@@ -150,7 +149,7 @@ class RegistrationTransformNode(ProvenanceNode):
     template_manifest_hash: str
 
     @model_validator(mode="after")
-    def _validate_registration(self) -> "RegistrationTransformNode":
+    def _validate_registration(self) -> RegistrationTransformNode:
         if self.residual < 0.0:
             raise ValueError("registration residual cannot be negative")
         if not is_content_hash(self.template_manifest_hash):
@@ -166,7 +165,7 @@ class CropArtifactNode(ProvenanceNode):
     bbox: tuple[float, float, float, float]
 
     @model_validator(mode="after")
-    def _validate_crop(self) -> "CropArtifactNode":
+    def _validate_crop(self) -> CropArtifactNode:
         if not is_content_hash(self.crop_hash):
             raise ValueError(f"crop_hash must be a sha256 digest, got {self.crop_hash!r}")
         x0, y0, x1, y1 = self.bbox
@@ -193,7 +192,7 @@ class DerivationNode(ProvenanceNode):
     template_version: str
 
     @model_validator(mode="after")
-    def _validate_derivation(self) -> "DerivationNode":
+    def _validate_derivation(self) -> DerivationNode:
         if not self.input_hashes:
             raise ValueError("a derivation requires at least one input hash")
         if not all(is_content_hash(h) for h in self.input_hashes):
@@ -212,7 +211,7 @@ class DecisionRevisionNode(ProvenanceNode):
     evidence_set_node_id: str | None = None
 
     @model_validator(mode="after")
-    def _validate_revision(self) -> "DecisionRevisionNode":
+    def _validate_revision(self) -> DecisionRevisionNode:
         if self.revision_index < 0:
             raise ValueError("revision_index must be non-negative")
         if self.supersedes_node_id is not None and self.supersedes_node_id == self.node_id:
@@ -253,7 +252,7 @@ class ProvenanceEdge(BaseModel):
     relation: EdgeRelation
 
     @model_validator(mode="after")
-    def _validate(self) -> "ProvenanceEdge":
+    def _validate(self) -> ProvenanceEdge:
         if self.source_id == self.target_id:
             raise ValueError("self-loops are not permitted in the provenance graph")
         return self
@@ -281,7 +280,7 @@ class ProvenanceGraph:
 
     # -- construction ---------------------------------------------------
 
-    def add_node(self, node: AnyNode) -> "ProvenanceGraph":
+    def add_node(self, node: AnyNode) -> ProvenanceGraph:
         if node.node_id in self._nodes:
             raise ValueError(f"duplicate provenance node id {node.node_id}")
         if len(self._nodes) >= MAX_GRAPH_NODES:
@@ -289,25 +288,23 @@ class ProvenanceGraph:
         self._nodes[node.node_id] = node
         return self
 
-    def add_edge(self, edge: ProvenanceEdge) -> "ProvenanceGraph":
+    def add_edge(self, edge: ProvenanceEdge) -> ProvenanceGraph:
         missing = [i for i in (edge.source_id, edge.target_id) if i not in self._nodes]
         if missing:
             raise ValueError(f"edge references unknown node(s): {missing}")
         self._edges.append(edge)
         if self._has_cycle():
             self._edges.pop()
-            raise ValueError(
-                f"edge {edge.source_id} -> {edge.target_id} would create a cycle"
-            )
+            raise ValueError(f"edge {edge.source_id} -> {edge.target_id} would create a cycle")
         return self
 
-    def with_node(self, node: AnyNode) -> "ProvenanceGraph":
+    def with_node(self, node: AnyNode) -> ProvenanceGraph:
         """Return a new graph containing *node* (this graph is untouched)."""
         clone = ProvenanceGraph(self._nodes.values(), self._edges)
         clone.add_node(node)
         return clone
 
-    def with_edge(self, edge: ProvenanceEdge) -> "ProvenanceGraph":
+    def with_edge(self, edge: ProvenanceEdge) -> ProvenanceGraph:
         """Return a new graph containing *edge* (this graph is untouched)."""
         clone = ProvenanceGraph(self._nodes.values(), self._edges)
         clone.add_edge(edge)

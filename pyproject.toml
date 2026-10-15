@@ -59,3 +59,12 @@ pythonpath = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Stream B (R0 remediation): ruff lints .ipynb/.md code blocks when no
+# exclude is set. Exclude notebook/markdown artifacts and Kaggle entry
+# points containing `!pip` notebook-magic lines (invalid Python syntax).
+exclude = [
+    "*.ipynb",
+    "*.md",
+    "kaggle_notebook.py",
+    "kaggle_run.py",
+]
